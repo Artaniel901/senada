@@ -13,6 +13,8 @@
   <a href="https://cicada.indaloop.app/ko/"><img src="https://img.shields.io/badge/%EC%9B%B9%EC%82%AC%EC%9D%B4%ED%8A%B8-cicada.indaloop.app-E8552B?style=for-the-badge" alt="웹사이트: cicada.indaloop.app" height="36"></a>
   &nbsp;
   <a href="https://cicada.indaloop.app/ko/download/"><img src="https://img.shields.io/badge/%EB%8B%A4%EC%9A%B4%EB%A1%9C%EB%93%9C-Mac%20·%20Windows%20·%20Linux%20·%20Android-15171C?style=for-the-badge" alt="Mac, Windows, Linux, Android 다운로드" height="36"></a>
+  &nbsp;
+  <a href="https://x.com/wquguru"><img src="https://img.shields.io/badge/%ED%8C%94%EB%A1%9C%EC%9A%B0-@wquguru-000000?style=for-the-badge&logo=x&logoColor=white" alt="X에서 @wquguru 팔로우" height="36"></a>
 </p>
 
 <p align="center">
@@ -22,6 +24,8 @@
   <img src="https://img.shields.io/badge/Android-10%2B-black" alt="Android 10+">
   <img src="https://img.shields.io/badge/%EB%9D%BC%EC%9D%B4%EC%84%A0%EC%8A%A4-Apache--2.0-blue" alt="Apache-2.0">
 </p>
+
+<p align="center">⭐ 쓸 만하다면 나중에 다시 찾기 쉽게 Star를 눌러 주세요</p>
 
 <p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></p>
 

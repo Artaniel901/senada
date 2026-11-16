@@ -13,6 +13,8 @@
   <a href="https://cicada.indaloop.app"><img src="https://img.shields.io/badge/官网-cicada.indaloop.app-E8552B?style=for-the-badge" alt="官网 cicada.indaloop.app" height="36"></a>
   &nbsp;
   <a href="https://cicada.indaloop.app/download/"><img src="https://img.shields.io/badge/下载-Mac%20·%20Windows%20·%20Linux%20·%20Android-15171C?style=for-the-badge" alt="下载 Mac、Windows、Linux、Android 版" height="36"></a>
+  &nbsp;
+  <a href="https://x.com/wquguru"><img src="https://img.shields.io/badge/关注-@wquguru-000000?style=for-the-badge&logo=x&logoColor=white" alt="在 X 上关注 @wquguru" height="36"></a>
 </p>
 
 <p align="center">
@@ -22,6 +24,8 @@
   <img src="https://img.shields.io/badge/Android-10%2B-black" alt="Android 10+">
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0">
 </p>
+
+<p align="center">⭐ 觉得有用请点个 Star，方便随时找回</p>
 
 <p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></p>
 
