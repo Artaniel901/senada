@@ -3,9 +3,10 @@ import CryptoKit
 
 /// Installs an update in place: downloads the release zip, checks it against checksums.txt,
 /// unpacks it, then hands off to a small shell script that swaps the app bundle once the app
-/// has quit and relaunches it. URLSession downloads carry no quarantine, so the new (ad-hoc
-/// signed) app opens without a Gatekeeper prompt; its designated requirement is the bundle id,
-/// so the system-audio and microphone permissions carry over.
+/// has quit and relaunches it. URLSession downloads carry no quarantine, so the new app (Developer
+/// ID signed and notarized since 1.11.0, ad-hoc before) opens without a Gatekeeper prompt; its
+/// designated requirement is the bundle id either way, so the system-audio and microphone
+/// permissions carry over, also from an ad-hoc build to a notarized one.
 @MainActor
 enum Updater {
     struct Failure: LocalizedError {

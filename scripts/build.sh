@@ -50,7 +50,13 @@ ICON_FLAGS=()
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 
 # A fixed designated requirement (the bundle id alone), so rebuilding keeps the system-audio and
-# microphone permissions instead of asking again after every build.
+# microphone permissions instead of asking again after every build. A Developer ID signature
+# (SIGN_IDENTITY, set for releases) keeps the same requirement: permissions granted to the earlier
+# ad-hoc builds carry over. It adds the hardened runtime and a timestamp, which notarization needs.
 ID=$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "$PLIST")
-codesign --force --sign - --requirements "=designated => identifier \"$ID\"" "$APP" >/dev/null
-echo "Built $APP ($ID)"
+SIGN_FLAGS=(--sign -)
+if [[ -n "${SIGN_IDENTITY:-}" ]]; then
+  SIGN_FLAGS=(--sign "$SIGN_IDENTITY" --options runtime --timestamp --entitlements Resources/Cicada.entitlements)
+fi
+codesign --force "${SIGN_FLAGS[@]}" --requirements "=designated => identifier \"$ID\"" "$APP" >/dev/null
+echo "Built $APP ($ID, signed by ${SIGN_IDENTITY:-ad hoc})"
