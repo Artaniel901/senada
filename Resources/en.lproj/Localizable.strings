@@ -1580,7 +1580,6 @@
 "停止" = "Stop";
 
 /* iOS: export */
-"格式" = "Format";
 "分享" = "Share";
 "SRT 字幕" = "SRT Subtitles";
 "文字记录和纪要" = "Transcript and notes";
@@ -1625,3 +1624,15 @@
 "连不上翻译，%lld 句等连上后再翻" = "Can't reach translation · %lld lines wait for the connection";
 "连不上翻译，填 Ling key 后不用代理也能用" = "Can't reach translation. With a Ling key it works without a proxy";
 "网络连不上，连上后再说一次" = "No connection. Say it again once you're online";
+
+/* iOS: face to face row, notes first, share link, voices, settings */
+"存成文件" = "Save as a file";
+"分享和导出" = "Share and export";
+"手机念给对方听" = "The phone reads it aloud";
+"点开看字幕" = "Tap for subtitles";
+"刚才" = "Just now";
+"只存在这台手机上，会议记录里能回放原声" = "Kept on this phone only. Play it back in the record.";
+"我的语言" = "Mine";
+"分享链接" = "Share link";
+"Ling 不可用时自动换成手机的声音" = "Falls back to the phone's voice when Ling is unavailable";
+"听起来不像或有杂音？换个安静的地方重录一次。录音只存在这台手机上，可随时删除。" = "Doesn't sound like you, or noisy? Record again somewhere quiet. The recording stays on this phone and can be deleted anytime.";
