@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import SwiftUI
 
 /// 复制纪要 as rich text: one copy puts HTML (document apps: Feishu, DingTalk, Notion, web
@@ -76,6 +78,7 @@ extension TranscriptExport {
     }
 }
 
+#if os(macOS)
 @MainActor
 enum RichCopy {
     /// Puts `markdown` as plain text and `html` as HTML and RTFD on the general pasteboard.
@@ -144,3 +147,4 @@ enum RichCopy {
         return .init(png: png, width: pictureWidth)
     }
 }
+#endif

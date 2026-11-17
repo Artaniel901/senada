@@ -75,7 +75,8 @@ struct RecordView: View {
                         .frame(maxWidth: .infinity).padding(.top, 40)
                     } else {
                         // Ling wrote "说话人 6" before anyone was named; show the names since given.
-                        NotesPage(notes: session.notes.map { SpeakerLabels.named($0, SpeakerLabels.names(session)) })
+                        NotesPage(notes: session.notes.map { SpeakerLabels.named($0, SpeakerLabels.names(session)) },
+                                  edit: model.editHooks(session))
                             .padding(.top, 18)
                     }
                 }
@@ -102,6 +103,12 @@ struct RecordView: View {
                 }
                 .disabled(notes.generatingID != nil || session.lines.isEmpty)
                 .accessibilityLabel(Text("生成纪要"))
+                if session.notes.map({ !$0.isEmpty }) == true {
+                    Button { model.copyNotes(session) } label: {
+                        Image(systemName: model.copiedNotes == session.id ? "checkmark" : "doc.on.doc")
+                    }
+                    .accessibilityLabel(Text("复制纪要"))
+                }
                 Button { model.exporting = session.id } label: { Image(systemName: "square.and.arrow.up") }
                     .disabled(session.lines.isEmpty)
                     .accessibilityLabel(Text("导出"))
@@ -121,6 +128,7 @@ struct RecordView: View {
             if let u = model.speakerUndo, u.session == session.id, !u.text.isEmpty, !player.available {
                 SpeakerUndoBar(text: u.text) { model.undoSpeakerEdit() }.padding(.horizontal, 16).padding(.bottom, 8)
             }
+            if model.copiedNotes == session.id { CopiedToast().padding(.horizontal, 16).padding(.bottom, player.available ? 0 : 8) }
             if !player.available { FixToast(fixes: model.fixes).padding(.horizontal, 16).padding(.bottom, 8) }
             if player.available {
                 VStack(spacing: 8) {
@@ -141,6 +149,7 @@ struct RecordView: View {
             }
         }
         .animation(.snappy(duration: 0.2), value: model.speakerUndo?.id)
+        .animation(.snappy(duration: 0.2), value: model.copiedNotes)
         .animation(.snappy(duration: 0.2), value: model.fixes.toast)
         .sheet(item: Binding(get: { model.editingLine.flatMap { $0.session == session.id ? $0 : nil } },
                              set: { model.editingLine = $0 })) { e in
@@ -382,6 +391,8 @@ struct TranscriptList: View {
 
 struct NotesPage: View {
     let notes: MeetingNotes?
+    /// A finished meeting's: the summary, conclusions and to-dos open in place on a tap.
+    var edit: NotesEditHooks? = nil
     /// The design's 16 pt notes text, as the transcript's translation.
     @ScaledMetric(relativeTo: .callout) private var size: CGFloat = 16
 
@@ -389,7 +400,11 @@ struct NotesPage: View {
         if let n = notes, !n.summary.isEmpty || !n.topics.isEmpty {
             VStack(alignment: .leading, spacing: 22) {
                 if !n.summary.isEmpty {
-                    block("总结") { Text(n.summary).font(.system(size: size)).lineSpacing(5) }
+                    block("总结") {
+                        EditableNote(target: .summary, text: n.summary, hooks: edit) {
+                            Text(n.summary).font(.system(size: size)).lineSpacing(5)
+                        }
+                    }
                 }
                 if !n.topics.isEmpty {
                     block("议题") {
@@ -417,19 +432,23 @@ struct NotesPage: View {
                 if !n.conclusions.isEmpty {
                     block("结论") {
                         ForEach(Array(n.conclusions.enumerated()), id: \.element.id) { i, c in
-                            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                Text("\(i + 1)").font(.system(size: size, weight: .bold)).foregroundStyle(Ink.link)
-                                Text(c.text).font(.system(size: size)).lineSpacing(3)
+                            EditableNote(target: .item(i), text: c.text, hooks: edit) {
+                                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                    Text("\(i + 1)").font(.system(size: size, weight: .bold)).foregroundStyle(Ink.link)
+                                    Text(c.text).font(.system(size: size)).lineSpacing(3)
+                                }
                             }
                         }
                     }
                 }
                 if !n.todos.isEmpty {
                     block("待办") {
-                        ForEach(n.todos) { t in
-                            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                                Image(systemName: "square").font(.system(size: size)).foregroundStyle(Ink.tertiary)
-                                Text((t.owner.map { "\($0)：" } ?? "") + t.text).font(.system(size: size)).lineSpacing(3)
+                        ForEach(Array(n.todos.enumerated()), id: \.element.id) { i, t in
+                            EditableNote(target: .item(n.conclusions.count + i), text: t.text, hooks: edit) {
+                                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                    Image(systemName: "square").font(.system(size: size)).foregroundStyle(Ink.tertiary)
+                                    Text((t.owner.map { "\($0)：" } ?? "") + t.text).font(.system(size: size)).lineSpacing(3)
+                                }
                             }
                         }
                     }

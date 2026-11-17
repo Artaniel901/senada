@@ -46,6 +46,7 @@ extension MeetingNotes {
     }
 }
 
+#if !CICADA_IOS
 extension AppModel {
     /// Not while the meeting is being written (the next pass would redo the notes), nor while an
     /// import is still transcribing.
@@ -68,3 +69,4 @@ extension AppModel {
         debugLog("notes edit: saved \(target) in \(id)")
     }
 }
+#endif
