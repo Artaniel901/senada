@@ -207,6 +207,8 @@ struct SpeakerChips: View {
     @Binding var picked: Int?
     @AppStorage(Pref.voices) private var voicesOn = true
     @State private var draft = ""
+    /// 记住这个声音: the voice and the name, waiting for the user to confirm.
+    @State private var remembering: (voice: Int, name: String)?
     /// The speaker number being named; on the model so a debug command can open it too.
     private var naming: Int? { model.namingSpeaker }
 
@@ -222,6 +224,9 @@ struct SpeakerChips: View {
                     // Tap picks the speaker (only they stay in ink); a long press renames or merges.
                     Menu {
                         Button { draft = names[n] ?? ""; model.namingSpeaker = n } label: { Label("改名字", systemImage: "pencil") }
+                        if let v = byNumber[n] {
+                            Button { remembering = (v, names[n] ?? "") } label: { Label("记住这个声音", systemImage: "person.wave.2") }
+                        }
                         Section("其实是同一个人") {
                             ForEach(numbers.filter { $0 != n }, id: \.self) { other in
                                 Button(L("并入 \(SpeakerLabels.label(other, names))")) {
@@ -248,6 +253,17 @@ struct SpeakerChips: View {
                 }
             }
             .onChange(of: model.namingSpeaker) { if let n = model.namingSpeaker, draft.isEmpty { draft = names[n] ?? "" } }
+            .alert(Text(L("记住“\(remembering?.name ?? "")”的声音？")), isPresented: Binding(get: { remembering != nil }, set: { if !$0 { remembering = nil } })) {
+                Button("记住") { if let r = remembering { model.rememberSpeaker(session: session.id, voice: r.voice, name: r.name) }; remembering = nil }
+                Button("不用", role: .cancel) { remembering = nil }
+            } message: {
+                Text("请先确认对方知道。声纹只保存在这台手机，用于以后会议认出这个人，可随时在人员库里删除。")
+            }
+            .alert(Text(verbatim: model.speakerProblem?.0 ?? ""), isPresented: Binding(get: { model.speakerProblem != nil }, set: { if !$0 { model.speakerProblem = nil } })) {
+                Button("好") { model.speakerProblem = nil }
+            } message: {
+                Text(verbatim: model.speakerProblem?.1 ?? "")
+            }
             .alert(Text("是谁"), isPresented: Binding(get: { naming != nil }, set: { if !$0 { model.namingSpeaker = nil } })) {
                 TextField(L("输入名字"), text: $draft)
                 Button("保存") { save(byNumber) }

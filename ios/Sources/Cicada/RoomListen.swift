@@ -40,6 +40,8 @@ final class RoomListen: ObservableObject {
     /// A line was written or its words changed (a joined sentence): the word list's known
     /// misheard forms are fixed at once (`LiveFixes.applyKnown`).
     var onHeard: ((_ session: String, _ lineID: String) -> Void)?
+    /// A meeting was stored as ended (存到文件夹 writes it once its notes are done).
+    var onEnded: ((_ session: String) -> Void)?
     /// Debug (`silentListen`): a meeting with no microphone and no recognizer, fed by `heard:`.
     static var silent = false
     private var silentClock = 0.0
@@ -73,7 +75,22 @@ final class RoomListen: ObservableObject {
             self.store.setVoice(lineID: lineID, voice)
             if let i = self.lines.firstIndex(where: { $0.id == lineID }) { self.lines[i].voice = voice }
         }
+        // 记住的人: a remembered voice is named as soon as it is heard, as on the Mac.
+        speakers.onProfile = { [weak self] lineID, voice, match in
+            guard let self, let id = self.store.liveID else { return }
+            self.store.setVoice(lineID: lineID, voice)
+            self.store.setVoiceProfile(id, voice: voice, ref: match.ref)
+            self.profiles?.markSeen(id: match.profile.id)
+            if let i = self.lines.firstIndex(where: { $0.id == lineID }) { self.lines[i].voice = voice }
+            debugLog("voice profiles: heard \(match.profile.name) (\(String(format: "%.2f", match.similarity)))")
+        }
     }
+
+    /// 记住的人 (PeoplePage.swift): voices remembered by voiceprint, matched while listening.
+    var profiles: SpeakerProfileStore? { didSet { speakers.profiles = profiles } }
+
+    /// A voice just remembered in the meeting still going: it keeps that name from now on.
+    func bind(voice: Int, profile: SpeakerProfile) { speakers.bind(voice: voice, profile: profile) }
 
     /// Distinct voices heard so far.
     var speakerCount: Int { Set(lines.compactMap(\.voice)).count }
@@ -268,7 +285,9 @@ final class RoomListen: ObservableObject {
             reader?.cancel()
             notes.finish()
             // A meeting with no line is kept only when the microphone heard voices (its recording holds them).
+            let ended = sessionID
             store.end(at: endedAt, heardSpeech: heardVoice)
+            if let ended, store.session(ended) != nil { onEnded?(ended) }
             debugLog("room: stopped lines=\(lines.count)")
             sessionID = nil
             startedAt = nil
