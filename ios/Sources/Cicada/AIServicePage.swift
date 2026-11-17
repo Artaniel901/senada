@@ -138,6 +138,8 @@ struct AIServicePage: View {
         }
         .background(Ink.ground)
         .navigationTitle(Text("AI 服务"))
+        .onAppear { ling.recheckIfFailed() }
+        .refreshable { await ling.check() }
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -191,6 +193,17 @@ struct AIServicePage: View {
         provider = s.id.rawValue
         model.aiChanged()
         tick += 1
+    }
+}
+
+extension LingClient {
+    /// Opening AI 服务 after a failed check asks again: what was wrong may have been fixed on the
+    /// service's side (a key's model list, its credit) without anything changing here.
+    func recheckIfFailed() {
+        switch keyState {
+        case .invalid, .unreachable, .unchecked: Task { await check() }
+        default: break
+        }
     }
 }
 

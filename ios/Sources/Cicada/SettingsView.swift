@@ -313,7 +313,9 @@ struct KeyPage: View {
                 }
                 if ling.key != nil && !editing {
                     HStack {
-                        if case .unreachable = ling.keyState { Button("重试") { Task { await ling.check() } } }
+                        // Any state: a key fixed on the service's side (its model list, its credit) is checked again here.
+                        Button("重新检查") { Task { await ling.check() } }
+                            .disabled(ling.keyState == .checking)
                         Spacer()
                         Button("移除", role: .destructive) { ling.removeKey() }
                     }
@@ -327,6 +329,7 @@ struct KeyPage: View {
         }
         .background(Ink.ground)
         .navigationTitle(Text(verbatim: ling.provider.id == .custom ? "Key" : "\(ling.provider.name) key"))
+        .onAppear { ling.recheckIfFailed() }
         .navigationBarTitleDisplayMode(.inline)
     }
 
