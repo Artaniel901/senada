@@ -277,7 +277,7 @@ final class FaceToFace: ObservableObject {
 /// The microphone for one press: `AVAudioEngine`'s input → the recognizer's format.
 final class FaceMic: @unchecked Sendable {
     private var engine = AVAudioEngine()
-    private let queue = DispatchQueue(label: "com.wquguru.cicada.face")
+    private let queue = DispatchQueue(label: "com.indaloop.cicada.face")
     private let convert = PCMConverter()
     private var stream: RecognitionStream?
 

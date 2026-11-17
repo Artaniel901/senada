@@ -18,7 +18,7 @@ struct CicadaLiveBundle: WidgetBundle {
 /// 开始听 in Control Center and on the lock screen.
 struct StartListeningControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
-        StaticControlConfiguration(kind: "com.wquguru.cicada.start") {
+        StaticControlConfiguration(kind: "com.indaloop.cicada.start") {
             ControlWidgetButton(action: StartListeningIntent()) {
                 Label("开始听", systemImage: "mic.fill")
             }

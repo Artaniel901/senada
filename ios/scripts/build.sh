@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds Cicada.app: the shared Mac sources (ios/shared-sources.txt) and ios/Sources in one module,
 # bundled by hand like the Mac's scripts/build.sh (no .xcodeproj).
-# Without RELEASE=1 it is a dev build: "Cicada Dev", bundle id com.wquguru.cicada.dev, cicada-dev:// commands.
+# Without RELEASE=1 it is a dev build: "Cicada Dev", bundle id com.indaloop.cicada.dev, cicada-dev:// commands.
 #   ios/scripts/build.sh                 the simulator: ios/build/Cicada.app, signed ad hoc
 #   DEVICE=1 ios/scripts/build.sh        an iPhone or iPad: ios/build/device/Cicada.app, signed with
 #                                        SIGN_IDENTITY and the profiles PROFILE (app) and PROFILE_LIVE
@@ -123,14 +123,14 @@ for p in "$PLIST" "$APPEX/Info.plist"; do
 done
 if [[ "${RELEASE:-}" != 1 ]]; then
   STAMP="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo local) @ $(git rev-parse --short HEAD 2>/dev/null || echo none)"
-  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.wquguru.cicada.dev" \
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.indaloop.cicada.dev" \
     -c "Set :CFBundleName Cicada Dev" -c "Set :CFBundleDisplayName Cicada Dev" \
     -c "Add :LiveSubsDev string $STAMP" \
-    -c "Set :BGTaskSchedulerPermittedIdentifiers:0 com.wquguru.cicada.dev.import" \
+    -c "Set :BGTaskSchedulerPermittedIdentifiers:0 com.indaloop.cicada.dev.import" \
     -c "Add :CFBundleURLTypes array" -c "Add :CFBundleURLTypes:0 dict" \
     -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string cicada-dev" \
     "$PLIST"
-  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.wquguru.cicada.dev.live" "$APPEX/Info.plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.indaloop.cicada.dev.live" "$APPEX/Info.plist"
 fi
 if [[ "${DEVICE:-}" != 1 ]]; then
   codesign --force --sign - "$APPEX" 2>/dev/null

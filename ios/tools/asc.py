@@ -5,10 +5,10 @@ packages: the JWT is signed with openssl (ES256), requests go through urllib.
 Credentials come from the environment (never from the repo):
   ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH (the .p8, e.g. ~/.cicada-signing/AuthKey_<id>.p8)
 
-  ios/tools/asc.py get <path>                  e.g. /v1/bundleIds?filter[identifier]=com.wquguru.cicada
+  ios/tools/asc.py get <path>                  e.g. /v1/bundleIds?filter[identifier]=com.indaloop.cicada
   ios/tools/asc.py post <path> <json>
   ios/tools/asc.py delete <path>
-Prints the JSON reply. ios/scripts/provision.sh builds on it.
+Prints the JSON reply. ios/tools/provision.py builds on it.
 """
 import base64, json, os, subprocess, sys, tempfile, time, urllib.error, urllib.request
 

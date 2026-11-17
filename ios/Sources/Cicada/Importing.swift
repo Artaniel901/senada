@@ -64,7 +64,7 @@ struct PickedMovie: Transferable {
 /// The system's progress for imports running behind other apps (iOS 26).
 @MainActor
 enum ImportBackground {
-    static var identifier: String { (Bundle.main.bundleIdentifier ?? "com.wquguru.cicada") + ".import" }
+    static var identifier: String { (Bundle.main.bundleIdentifier ?? "com.indaloop.cicada") + ".import" }
     private static var task: BGContinuedProcessingTask?
     private static var ticker: Timer?
     static weak var importer: FileImporter?
