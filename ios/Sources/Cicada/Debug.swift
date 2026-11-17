@@ -163,6 +163,32 @@ extension AppModel {
             // A meeting without the microphone or the recognizer, fed lines by `heard:`.
             RoomListen.silent = arg != "off"
         case "heard": room.debugHeard(arg)
+        case "aiService":
+            // aiService:<ling|openrouter|zenmux|openai|custom>[,<text model>]; aiService opens the page
+            let p = arg.split(separator: ",", maxSplits: 1).map(String.init)
+            if let k = p.first, !k.isEmpty {
+                UserDefaults.standard.set(k, forKey: AIPrefs.provider)
+                if p.count > 1 { AIPrefs.setModel(p[1], for: AIProvider.named(k)) }
+                aiChanged()
+            }
+            tab = .settings
+            showSettings = true
+            showAIService = true
+        case "exportTo":
+            // exportTo:<folder in the app container>|off, as picking it in Files; exportAll; exportState
+            if arg == "off" { folderExport.turnOff() } else {
+                let url = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(arg, isDirectory: true)
+                try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                if folderPrefs.remember(url) { folderExport.choose(url) }
+            }
+            tab = .settings
+            showSettings = true
+            showFolder = true
+        case "exportAll": folderExport.writeAll()
+        case "exportState":
+            let x = folderExport
+            debugLog("folder export: on=\(x.on) folder=\(x.folder?.lastPathComponent ?? "-") files=\(x.index.files.count) pending=\(x.index.pending.count) last=\(x.index.lastFile ?? "-") problem=\(x.problem.map { "\($0)" } ?? "-")")
+        case "aiBase": UserDefaults.standard.set(arg, forKey: AIPrefs.customBase); aiChanged()
         case "voices":
             // voices[:off] opens 设置 › 念给对方的声音; voice:<lang>=<id> picks one; voiceSay:<lang> reads a sample
             tab = .settings
@@ -325,6 +351,29 @@ extension AppModel {
             // faceLangs:<my locale>,<their locale>
             let p = arg.split(separator: ",").map(String.init)
             if p.count == 2, let m = FaceToFace.lang(p[0]), let t = FaceToFace.lang(p[1]) { face.setLanguages(mine: m, theirs: t) }
+        case "faceHandsFree": face.setHandsFree(arg != "off")
+        case "faceTurnTo": if let side = FaceToFace.Side(rawValue: arg) { face.giveTurn(side) }
+        case "copyNotes":
+            if let s = store.session(selection ?? store.sessions.first?.id) { copyNotes(s) }
+        case "noteEdit":
+            // noteEdit:<summary|n>[=<text>]: opens that piece of the open meeting's notes; with text, saves it
+            let p = arg.split(separator: "=", maxSplits: 1).map(String.init)
+            let target: NoteEdit.Target = p.first == "summary" ? .summary : .item(Int(p.first ?? "") ?? 0)
+            guard let id = selection ?? store.sessions.first?.id else { break }
+            if p.count == 2 { saveNote(id, target, text: p[1]) } else { noteEdit = NoteEdit(session: id, target: target) }
+        case "remember":
+            // remember:<voice>=<name> remembers that voice of the open meeting (no confirmation: debug)
+            let p = arg.split(separator: "=", maxSplits: 1).map(String.init)
+            if p.count == 2, let v = Int(p[0]), let id = selection ?? store.sessions.first?.id { rememberSpeaker(session: id, voice: v, name: p[1]) }
+        case "voiceState":
+            if let s = store.session(selection ?? store.sessions.first?.id) {
+                debugLog("voices: on=\(TranscriptExport.voices) numbers=\(SpeakerLabels.voiceNumbers(s)) names=\(SpeakerLabels.names(s)) lineVoices=\(s.lines.prefix(8).map { $0.voice.map(String.init) ?? "-" }) speakers=\(Set(s.lines.map(\.speaker)))")
+            }
+        case "people":
+            tab = .settings
+            showSettings = true
+            showPeople = arg != "off"
+            debugLog("voice profiles: \(profiles.all().map(\.name))")
         case "faceState":
             debugLog("face active=\(face.active) phase=\(face.phase) heard=\(face.heard.count) last=\(face.last.map { "\($0.side.rawValue) \($0.said.count)/\($0.translation.count)" } ?? "-") problem=\(face.problem)")
         case "importState":
