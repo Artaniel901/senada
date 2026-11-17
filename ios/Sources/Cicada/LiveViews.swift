@@ -250,7 +250,9 @@ struct TranslateDownCard: View {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Ink.accent).padding(.top, 2)
                     VStack(alignment: .leading, spacing: 3) {
                         Text("连不上翻译，新字幕暂时只有原文").font(.subheadline.weight(.semibold)).foregroundStyle(Ink.ink)
-                        Text(model.ling.hasKey ? L("网络连不上，连上后会自动继续") : L("填 Ling key 后不用代理也能翻译，还会整理出纪要。"))
+                        Text(model.ling.hasKey ? L("网络连不上，连上后会自动继续")
+                             : model.ling.provider.id == .ling ? L("填 Ling key 后不用代理也能翻译，还会整理出纪要。")
+                             : L("填好 \(model.ling.provider.name) 的 key 后用它翻译，还会整理出纪要。"))
                             .font(.footnote).foregroundStyle(Ink.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 0)

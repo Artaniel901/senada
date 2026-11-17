@@ -60,6 +60,13 @@
 	<false/>
 	<key>MinimumOSVersion</key>
 	<string>26.0</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Only to reach the AI server you set up on your local network. Cicada doesn't look for or connect to other devices.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Cicada listens to the people in the room to show live translated subtitles and notes.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

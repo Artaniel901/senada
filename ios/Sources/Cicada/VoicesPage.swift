@@ -10,11 +10,16 @@ enum SpeakVoices {
     /// The voice for a language: the one picked, while it can still be used (Ming and the clone need
     /// the key, the clone its recording), else the catalog's default. `mine`: read for me (their
     /// words in my language), where my own voice would make no sense.
-    static func chosenID(for language: String, hasKey: Bool, mine: Bool = false) -> String? {
+    /// `clones`: the service can speak in the user's own voice (Ling only). A voice of another
+    /// service (Ming's picked under Ling, then ZenMux chosen) gives way to the default.
+    static func chosenID(for language: String, hasKey: Bool, mine: Bool = false, clones: Bool = true) -> String? {
         if let id = all[VoiceCatalog.key(for: language)] {
-            let clone = id == VoiceCatalog.cloneOption.id
             if id.hasPrefix("system:") { return id }
-            if hasKey, !clone || (!mine && VoiceReference.exists) { return id }
+            if hasKey, id == VoiceCatalog.cloneOption.id {
+                if clones, !mine, VoiceReference.exists { return id }
+            } else if hasKey, VoiceCatalog.remote(for: language).contains(where: { $0.id == id }) {
+                return id
+            }
         }
         return VoiceCatalog.defaultID(for: language, hasKey: hasKey)
     }
@@ -47,8 +52,10 @@ struct VoicesPage: View {
                 ForEach(languages, id: \.self) { lang in
                     section(lang)
                 }
-                Text(ling.hasKey ? L("Ling 不可用时自动换成手机的声音") : L("填入 Ling key 后可用 Ming 声音和你自己的声音"))
-                    .font(.footnote).foregroundStyle(Ink.secondary).padding(.horizontal, 4).padding(.top, 10)
+                if ling.provider.id == .ling {
+                    Text(ling.hasKey ? L("Ling 不可用时自动换成手机的声音") : L("填入 Ling key 后可用 Ming 声音和你自己的声音"))
+                        .font(.footnote).foregroundStyle(Ink.secondary).padding(.horizontal, 4).padding(.top, 10)
+                }
             }
             .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 120)
             .frame(maxWidth: 640).frame(maxWidth: .infinity)
@@ -80,7 +87,7 @@ struct VoicesPage: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                if !ling.hasKey {
+                if !ling.clones {
                     Text("只有 Ling 能用你自己的声音").font(.footnote).foregroundStyle(Ink.secondary)
                 } else if hasOwn {
                     HStack(spacing: 10) {
@@ -115,8 +122,8 @@ struct VoicesPage: View {
         let options = VoiceCatalog.options(for: lang)
         let mine = VoiceCatalog.key(for: lang) == VoiceCatalog.key(for: face.mine.code) && lang != face.theirs.code
         // My own voice only for what is read to the other person (这是我自己的声音。只在我说话时用它替我翻译。).
-        let rows = (!mine && hasOwn && ling.hasKey ? [VoiceCatalog.cloneOption] : []) + options
-        let current = SpeakVoices.chosenID(for: lang, hasKey: ling.hasKey, mine: mine)
+        let rows = (!mine && hasOwn && ling.clones ? [VoiceCatalog.cloneOption] : []) + options
+        let current = SpeakVoices.chosenID(for: lang, hasKey: ling.hasKey, mine: mine, clones: ling.clones)
         return VStack(alignment: .leading, spacing: 6) {
             Text(verbatim: name(lang) + " · " + (mine ? L("对方说\(Pref.name(of: face.theirs))时用") : L("对方会听到这个")))
                 .font(.footnote).foregroundStyle(Ink.secondary).padding(.horizontal, 4).padding(.top, 14)
