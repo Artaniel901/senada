@@ -24,9 +24,9 @@ struct RecordsSplit: View {
                     HomeTitle(trailing: AnyView(
                         ImportMenu { GlassIcon(systemName: "arrow.down.to.line") }))
                     .padding(.top, 6)
-                    HStack(spacing: 10) {
+                    VStack(spacing: 10) {
                         ListenBar()
-                        if !room.isRunning { FaceButton() }
+                        if !room.isRunning { FaceRow(face: model.face) }
                     }
                     .padding(.top, 16)
                     ImportCard(importer: model.importer)
@@ -106,9 +106,9 @@ struct PadRoot: View {
                     .buttonStyle(.plain).accessibilityLabel(Text("设置"))
             }))
             .padding(.horizontal, 4)
-            HStack(spacing: 8) {
+            VStack(spacing: 8) {
                 ListenBar(onGlass: true)
-                if !room.isRunning { FaceButton(onGlass: true) }
+                if !room.isRunning { FaceRow(face: model.face, onGlass: true) }
             }
             .padding(.top, 14).padding(.bottom, 12)
             ImportCard(importer: model.importer).padding(.top, -22).padding(.bottom, 12)

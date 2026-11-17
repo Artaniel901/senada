@@ -204,33 +204,50 @@ private struct HoldButton: View {
 }
 
 /// 面对面 beside 开始听 on the home screen.
-struct FaceButton: View {
+/// 面对面 under 开始听, a row of its own as tall as it: the icon and the name at full size, and
+/// the languages and what happens (the phone reads it out), so it doesn't pass for another 开始听.
+struct FaceRow: View {
     @EnvironmentObject var model: AppModel
+    @ObservedObject var face: FaceToFace
     var onGlass = false
 
     var body: some View {
         Button { model.openFace() } label: {
-            VStack(spacing: 1) {
-                Image(systemName: "bubble.left.and.text.bubble.right").font(.system(size: 19, weight: .medium))
-                Text("面对面").font(.system(size: 10, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7).padding(.horizontal, 4)
+            HStack(spacing: 12) {
+                Image(systemName: "bubble.left.and.text.bubble.right")
+                    .font(.system(size: 19, weight: .medium)).foregroundStyle(Ink.ink)
+                    .frame(width: 44, height: 44)
+                    .background(Ink.ground, in: Circle())
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("面对面").font(.headline).foregroundStyle(Ink.ink).lineLimit(1)
+                    // Narrow (the iPad sidebar, English): the languages only, never a clipped sentence.
+                    let pair = "\(Pref.name(of: face.mine)) ⇄ \(Pref.name(of: face.theirs))"
+                    ViewThatFits(in: .horizontal) {
+                        Text(verbatim: pair + " · " + L("手机念给对方听"))
+                        Text(verbatim: pair)
+                    }
+                    .font(.footnote).foregroundStyle(Ink.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Ink.tertiary)
             }
-            .foregroundStyle(Ink.ink)
-            .frame(width: 58, height: 58)
+            .padding(.leading, 7).padding(.trailing, 18)
+            .frame(height: 58)
             .background {
-                if onGlass { Circle().fill(Color.white).shadow(color: Ink.ink.opacity(0.08), radius: 2, y: 1) }
+                if onGlass { Capsule().fill(Color.white).shadow(color: Ink.ink.opacity(0.08), radius: 2, y: 1) }
             }
-            .contentShape(Circle())
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .modifier(GlassCircle(on: !onGlass))
+        .modifier(GlassRow(on: !onGlass))
         .accessibilityLabel(Text("面对面同声传译"))
     }
 }
 
-private struct GlassCircle: ViewModifier {
+private struct GlassRow: ViewModifier {
     let on: Bool
     func body(content: Content) -> some View {
-        if on { content.glassEffect(.regular.interactive(), in: Circle()) } else { content }
+        if on { content.glassEffect(.regular.interactive(), in: Capsule()) } else { content }
     }
 }
 

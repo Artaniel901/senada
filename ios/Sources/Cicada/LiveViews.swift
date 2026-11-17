@@ -31,7 +31,9 @@ struct HomeTitle: View {
                         .lineLimit(1).minimumScaleFactor(0.7)
                 } else {
                     Text(dateText(Date(), "MMMdEEEE")).font(.footnote).foregroundStyle(Ink.secondary)
+                    // iPad's narrow sidebar: "Meetings" shrinks rather than breaking in two.
                     Text("会议记录").font(.system(size: titleSize, weight: .bold)).foregroundStyle(Ink.ink)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
             Spacer(minLength: 0)
