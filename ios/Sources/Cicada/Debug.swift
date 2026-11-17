@@ -72,8 +72,11 @@ extension AppModel {
         case "sampleStop":
             stopSample()
         case "import":
-            // import:<path>[|<path>…], a file on the Mac the simulator runs on, as if picked in Files
-            importFiles(arg.split(separator: "|").map { URL(fileURLWithPath: String($0)) })
+            // import:<path>[|<path>…], as if picked in Files: a file on the Mac the simulator runs on,
+            // or, relative, one copied into the app's container on a device (devicectl device copy to)
+            importFiles(arg.split(separator: "|").map {
+                $0.hasPrefix("/") ? URL(fileURLWithPath: String($0)) : URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(String($0))
+            })
         case "importStop":
             if let id = importer.current?.id { importer.cancel(id) }
         case "hear":
@@ -160,6 +163,16 @@ extension AppModel {
             // A meeting without the microphone or the recognizer, fed lines by `heard:`.
             RoomListen.silent = arg != "off"
         case "heard": room.debugHeard(arg)
+        case "translateFail":
+            // translateFail:<n>: the next n sentences fail on every provider, as on the Mac.
+            translator.failNext = Int(arg) ?? 1
+        case "googleDown":
+            // googleDown:<on|off>: Google fails as if there were no proxy, as on the Mac.
+            translator.simulateGoogleDown = arg != "off"
+        case "aiHide":
+            // aiHide:<on|off>: the key file stays; the app behaves as if there were none, as on the Mac.
+            ling.hideKey = arg != "off"
+            objectWillChange.send()
         case "heardT":
             let p = arg.split(separator: "|", maxSplits: 1).map(String.init)
             if p.count == 2 { room.debugHeard(p[0], translation: p[1]) }
