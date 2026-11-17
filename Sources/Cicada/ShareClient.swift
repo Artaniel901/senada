@@ -145,6 +145,14 @@ final class ShareClient {
         var views: Int
     }
 
+    /// Which app shares (the server keeps it per device and checks the version).
+    #if CICADA_IOS
+    static let platform = "ios"
+    #else
+    static let platform = "mac"
+    #endif
+    static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+
     /// Dev builds can point at a local Worker: `defaults write com.wquguru.cicada.dev shareServer http://127.0.0.1:8787`.
     var base: URL {
         if let s = UserDefaults.standard.string(forKey: "shareServer"), let u = URL(string: s) { return u }
@@ -180,7 +188,7 @@ final class ShareClient {
         if !force, let id = f.device, f.server == base.absoluteString { return (key, id) }
         let pub = key.publicKey.rawRepresentation
         let nonce = await Task.detached(priority: .userInitiated) { Self.proofOfWork(pub) }.value
-        let body: [String: Any] = ["key": Self.b64url(pub), "pow": Self.b64url(nonce), "platform": "mac", "version": Updates.current]
+        let body: [String: Any] = ["key": Self.b64url(pub), "pow": Self.b64url(nonce), "platform": Self.platform, "version": Self.version]
         let (data, status) = try await send("POST", "/api/v1/devices", body: try JSONSerialization.data(withJSONObject: body), signer: nil)
         guard status == 201, let id = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["device"] as? String else {
             throw Failure(code: Self.code(data) ?? "register_failed", retryAfter: nil)
@@ -216,7 +224,7 @@ final class ShareClient {
         req.timeoutInterval = 90
         req.httpBody = body
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("mac/\(Updates.current)", forHTTPHeaderField: "X-Cicada-Client")
+        req.setValue("\(Self.platform)/\(Self.version)", forHTTPHeaderField: "X-Cicada-Client")
         for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
         if let (key, id) = signer {
             let time = String(Int(Date().timeIntervalSince1970))

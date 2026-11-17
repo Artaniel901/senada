@@ -147,7 +147,7 @@ enum Docx {
     }
 }
 
-/// 导出, the design's sheet: the three formats, then 分享 (the system share sheet with the file).
+/// 分享和导出: 分享链接 (ShareCard), then the three formats and 分享 (the system share sheet with the file).
 struct ExportSheet: View {
     let session: Session
     @Environment(\.dismiss) private var dismiss
@@ -157,7 +157,7 @@ struct ExportSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("导出").font(.title3.bold()).foregroundStyle(Ink.ink)
+                Text("分享和导出").font(.title3.bold()).foregroundStyle(Ink.ink)
                 Spacer()
                 Button { dismiss() } label: {
                     Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(Ink.secondary)
@@ -168,7 +168,8 @@ struct ExportSheet: View {
                 .accessibilityLabel(Text("关闭"))
             }
             .padding(.horizontal, 4).padding(.top, 16)
-            SectionLabel(text: L("格式"))
+            ShareCard(session: session).padding(.top, 8)
+            SectionLabel(text: L("存成文件"))
             Card {
                 ForEach(Array(ExportFormat.allCases.enumerated()), id: \.element) { i, f in
                     if i > 0 { Hairline(inset: 62) }
@@ -190,7 +191,7 @@ struct ExportSheet: View {
         .padding(.horizontal, 16)
         .background(Ink.ground)
         .task(id: format) { make() }
-        .presentationDetents([.height(400)])
+        .presentationDetents([.large])
         .presentationCornerRadius(34)
     }
 
