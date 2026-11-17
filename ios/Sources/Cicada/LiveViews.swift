@@ -178,6 +178,7 @@ struct LivePhone: View {
                 HomeTitle()
                 ListenBar()
                 PillSwitch(selection: $page, options: [(.subtitles, "字幕"), (.notes, notesTitle)])
+                TranslateDownCard()
                 if let id = room.sessionID { FixAskCard(fixes: model.fixes, session: id) }
             }
             .padding(.horizontal, 16)
@@ -192,6 +193,7 @@ struct LivePhone: View {
         .background(Ink.ground)
         .overlay(alignment: .bottom) { FixToast(fixes: model.fixes).padding(.horizontal, 16).padding(.bottom, 8) }
         .animation(.snappy(duration: 0.2), value: model.fixes.toast)
+        .animation(.snappy(duration: 0.2), value: model.translationDown)
         .onChange(of: model.livePage) { page = model.livePage }
     }
 
@@ -201,6 +203,33 @@ struct LivePhone: View {
 }
 
 enum LivePage: String { case subtitles, notes }
+
+/// 连不上翻译: why the subtitles are only the original. Without a key, the key is the fix (Ling
+/// needs no proxy in mainland China), so the card opens 设置; with one, it comes back by itself.
+struct TranslateDownCard: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        if model.translationDown {
+            Button { if !model.ling.hasKey { model.tab = .settings; model.showSettings = true } } label: {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Ink.accent).padding(.top, 2)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("连不上翻译，新字幕暂时只有原文").font(.subheadline.weight(.semibold)).foregroundStyle(Ink.ink)
+                        Text(model.ling.hasKey ? L("网络连不上，连上后会自动继续") : L("填 Ling key 后不用代理也能翻译，还会整理出纪要。"))
+                            .font(.footnote).foregroundStyle(Ink.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                    if !model.ling.hasKey { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Ink.tertiary).padding(.top, 3) }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
 
 /// The lines so far as white cards, the one being said outlined in the accent; follows the newest.
 struct LiveLines: View {
@@ -266,6 +295,7 @@ struct LivePad: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            TranslateDownCard().frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
             if let id = room.sessionID {
                 FixAskCard(fixes: model.fixes, session: id).frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
             }

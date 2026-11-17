@@ -222,7 +222,8 @@ struct ImportCard: View {
         case .detecting: L("正在听是哪种语言…")
         case .downloading(let name): L("正在下载 \(name) 语音模型…")
         case .transcribing: L("文字记录已转到 \(TranscriptExport.clock(importer.heard)) / \(TranscriptExport.clock(importer.duration))")
-        case .translating: L("还有 \(importer.untranslated) 句在翻译")
+        case .translating:
+            model.translationDown ? L("连不上翻译，\(importer.untranslated) 句等连上后再翻") : L("还有 \(importer.untranslated) 句在翻译")
         }
     }
 }

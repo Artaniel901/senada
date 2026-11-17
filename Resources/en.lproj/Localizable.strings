@@ -1620,3 +1620,8 @@
 "下拉控制中心，点左上角的 + 添加" = "Pull down Control Center and tap + at the top left to add it";
 "“嘿 Siri，用%@开始听”" = "“Hey Siri, start listening with %@”";
 "“嘿 Siri，%@结束”" = "“Hey Siri, stop %@”";
+
+/* iOS: translation can't be reached */
+"连不上翻译，%lld 句等连上后再翻" = "Can't reach translation · %lld lines wait for the connection";
+"连不上翻译，填 Ling key 后不用代理也能用" = "Can't reach translation. With a Ling key it works without a proxy";
+"网络连不上，连上后再说一次" = "No connection. Say it again once you're online";

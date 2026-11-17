@@ -96,7 +96,16 @@ final class AppModel: ObservableObject {
     @Published var store = SessionStore()
     let ling = LingClient()
     lazy var notes = NotesEngine(ling: ling, store: store)
-    lazy var translator = TranslationService(ling: ling)
+    lazy var translator: TranslationService = {
+        let t = TranslationService(ling: ling)
+        t.onHealth = { [weak self] h in self?.translationHealth = h }
+        return t
+    }()
+    /// Whether translation can be reached: the live page, the import card and 面对面 say so.
+    @Published var translationHealth = TranslationHealth()
+    /// Finished sentences are going untranslated because nothing can be reached (no key, no
+    /// Google, no on-device model), so what is on screen is only the original.
+    var translationDown: Bool { translationHealth.googleDown && translationHealth.sentencesUntranslated }
     lazy var room: RoomListen = {
         let r = RoomListen(store: store, translator: translator, notes: notes)
         r.onStateChange = { [weak self] in self?.listeningChanged() }

@@ -213,7 +213,9 @@ final class FaceToFace: ObservableObject {
             // Never read out untranslated text (AGENTS.md).
             guard phase == .translating(side) else { return }
             phase = .idle
-            problem = L("没翻译出来，再说一次")
+            // Nothing reachable and no key: saying it again won't help, a key (or a network) will.
+            problem = translator.health.googleDown && !ling.hasKey ? L("连不上翻译，填 Ling key 后不用代理也能用")
+                : translator.health.googleDown ? L("网络连不上，连上后再说一次") : L("没翻译出来，再说一次")
             debugLog("face: translation failed")
             return
         }
