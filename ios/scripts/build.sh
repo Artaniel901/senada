@@ -1,13 +1,26 @@
 #!/usr/bin/env bash
-# Builds ios/build/Cicada.app for the iOS simulator: the shared Mac sources (ios/shared-sources.txt)
-# and ios/Sources in one module, bundled by hand like the Mac's scripts/build.sh (no .xcodeproj).
+# Builds Cicada.app: the shared Mac sources (ios/shared-sources.txt) and ios/Sources in one module,
+# bundled by hand like the Mac's scripts/build.sh (no .xcodeproj).
 # Without RELEASE=1 it is a dev build: "Cicada Dev", bundle id com.wquguru.cicada.dev, cicada-dev:// commands.
+#   ios/scripts/build.sh                 the simulator: ios/build/Cicada.app, signed ad hoc
+#   DEVICE=1 ios/scripts/build.sh        an iPhone or iPad: ios/build/device/Cicada.app, signed with
+#                                        SIGN_IDENTITY and the profiles PROFILE (app) and PROFILE_LIVE
+#                                        (the extension); ios/scripts/provision.sh makes them
+# BUILD_NUMBER sets CFBundleVersion (TestFlight wants it to grow); default: the commit count.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-SDK=iphonesimulator
-TARGET=arm64-apple-ios26.0-simulator
-APP=ios/build/Cicada.app
+if [[ "${DEVICE:-}" == 1 ]]; then
+  SDK=iphoneos
+  TARGET=arm64-apple-ios26.0
+  APP=ios/build/device/Cicada.app
+  PLATFORM=iPhoneOS
+else
+  SDK=iphonesimulator
+  TARGET=arm64-apple-ios26.0-simulator
+  APP=ios/build/Cicada.app
+  PLATFORM=iPhoneSimulator
+fi
 rm -rf "$APP"
 mkdir -p "$APP"
 
@@ -45,6 +58,20 @@ xcrun --sdk "$SDK" swiftc -O -swift-version 5 -parse-as-library -module-name Cic
 intents_metadata Cicada "$APP" "$APP/Cicada" "${files[@]}"
 
 cp ios/Resources/Info.plist "$APP/Info.plist"
+cp ios/Resources/PrivacyInfo.xcprivacy "$APP/"
+# The home screen icon: the Mac's renderer draws the full-bleed iOS square (no alpha), actool
+# compiles it into Assets.car and says which Info.plist keys point at it.
+ICON_TOOL=.build/release/CicadaIcon
+[[ -x $ICON_TOOL ]] || swift build -c release --product CicadaIcon >/dev/null
+mkdir -p "$WORK/Assets.xcassets/AppIcon.appiconset"
+"$ICON_TOOL" --ios "$WORK/Assets.xcassets/AppIcon.appiconset/icon.png" $([[ "${RELEASE:-}" == 1 ]] || echo --dev)
+printf '%s' '{"images":[{"filename":"icon.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"author":"xcode","version":1}}' \
+  > "$WORK/Assets.xcassets/AppIcon.appiconset/Contents.json"
+printf '%s' '{"info":{"author":"xcode","version":1}}' > "$WORK/Assets.xcassets/Contents.json"
+xcrun actool "$WORK/Assets.xcassets" --compile "$APP" --platform "$SDK" --minimum-deployment-target 26.0 \
+  --app-icon AppIcon --target-device iphone --target-device ipad \
+  --output-partial-info-plist "$WORK/assets.plist" --output-format human-readable-text >/dev/null
+/usr/libexec/PlistBuddy -c "Merge $WORK/assets.plist" "$APP/Info.plist" >/dev/null
 # UI text is the Mac's: the Chinese source is the key, the other languages translate it.
 for d in Resources/*.lproj; do
   mkdir -p "$APP/$(basename "$d")"
@@ -56,8 +83,6 @@ cp Resources/sample/sample.m4a "$APP/"
 cp -R Resources/models/SpeakerEmbedding.mlpackage "$APP/"
 # The logo on the 听会议室 card: the Mac's own icon renderer (Sources/CicadaIcon), not a fourth
 # copy of the geometry. It is a host tool, built once.
-ICON_TOOL=.build/release/CicadaIcon
-[[ -x $ICON_TOOL ]] || swift build -c release --product CicadaIcon >/dev/null
 ICONS=$(mktemp -d)
 "$ICON_TOOL" "$ICONS/logo.iconset" >/dev/null
 cp "$ICONS/logo.iconset/icon_128x128@2x.png" "$APP/logo.png"
@@ -80,7 +105,22 @@ cp "$APP/logo.png" "$APPEX/"
 for d in "$APP"/*.lproj; do cp -R "$d" "$APPEX/"; done
 
 PLIST="$APP/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $(tr -d '[:space:]' < VERSION)" "$PLIST"
+BUILD=${BUILD_NUMBER:-$(git rev-list --count HEAD 2>/dev/null || echo 1)}
+for p in "$PLIST" "$APPEX/Info.plist"; do
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $(tr -d '[:space:]' < VERSION)" \
+    -c "Set :CFBundleVersion $BUILD" -c "Set :CFBundleSupportedPlatforms:0 $PLATFORM" "$p"
+done
+# What Xcode writes into every bundle it builds; App Store Connect checks them.
+SDKVER=$(xcrun --sdk "$SDK" --show-sdk-version)
+SDKBUILD=$(xcrun --sdk "$SDK" --show-sdk-build-version)
+XCBUILD=$(xcodebuild -version | awk '/Build version/{print $3}')
+XCVER=$(xcodebuild -version | awk '/^Xcode/{split($2,v,"."); printf "%d%d%d0", v[1], v[2], v[3]}')
+for p in "$PLIST" "$APPEX/Info.plist"; do
+  /usr/libexec/PlistBuddy -c "Add :DTPlatformName string $SDK" -c "Add :DTPlatformVersion string $SDKVER" \
+    -c "Add :DTPlatformBuild string $SDKBUILD" -c "Add :DTSDKName string $SDK$SDKVER" -c "Add :DTSDKBuild string $SDKBUILD" \
+    -c "Add :DTXcode string $XCVER" -c "Add :DTXcodeBuild string $XCBUILD" \
+    -c "Add :DTCompiler string com.apple.compilers.llvm.clang.1_0" -c "Add :BuildMachineOSBuild string $(sw_vers -buildVersion)" "$p"
+done
 if [[ "${RELEASE:-}" != 1 ]]; then
   STAMP="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo local) @ $(git rev-parse --short HEAD 2>/dev/null || echo none)"
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.wquguru.cicada.dev" \
@@ -92,7 +132,21 @@ if [[ "${RELEASE:-}" != 1 ]]; then
     "$PLIST"
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.wquguru.cicada.dev.live" "$APPEX/Info.plist"
 fi
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $(tr -d '[:space:]' < VERSION)" "$APPEX/Info.plist"
-codesign --force --sign - "$APPEX" 2>/dev/null
-codesign --force --sign - "$APP" 2>/dev/null
-echo "Built $APP ($(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST"))"
+if [[ "${DEVICE:-}" != 1 ]]; then
+  codesign --force --sign - "$APPEX" 2>/dev/null
+  codesign --force --sign - "$APP" 2>/dev/null
+else
+  # A device needs a real signature: each bundle carries its profile, and is signed with the
+  # entitlements that profile grants (the extension first, then the app around it).
+  : "${SIGN_IDENTITY:?DEVICE=1 needs SIGN_IDENTITY (and PROFILE, PROFILE_LIVE): see ios/scripts/provision.sh}"
+  sign() {   # <bundle> <profile>
+    cp "$2" "$1/embedded.mobileprovision"
+    security cms -D -i "$2" > "$WORK/profile.plist"
+    /usr/libexec/PlistBuddy -x -c "Print :Entitlements" "$WORK/profile.plist" > "$WORK/entitlements.plist"
+    codesign --force --sign "$SIGN_IDENTITY" --entitlements "$WORK/entitlements.plist" --generate-entitlement-der "$1"
+  }
+  sign "$APPEX" "${PROFILE_LIVE:?}"
+  sign "$APP" "${PROFILE:?}"
+  codesign --verify --deep --strict "$APP"
+fi
+echo "Built $APP ($(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST") $(tr -d '[:space:]' < VERSION) ($BUILD))"

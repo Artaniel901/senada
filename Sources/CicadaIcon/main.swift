@@ -82,7 +82,9 @@ enum CicadaLogo {
     }
 }
 
-func render(_ px: Int, dev: Bool) -> Data {
+/// `ios`: the iPhone and iPad icon, a full-bleed opaque square (the system draws the corners and
+/// App Store Connect refuses an alpha channel); otherwise the macOS grid with its margin and shadow.
+func render(_ px: Int, dev: Bool, ios: Bool = false) -> Data {
     let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: px, pixelsHigh: px, bitsPerSample: 8,
                                samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
                                bytesPerRow: 0, bitsPerPixel: 0)!
@@ -90,13 +92,18 @@ func render(_ px: Int, dev: Bool) -> Data {
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
     let s = CGFloat(px) / 1024
     // macOS icon grid: an 824 pt body inset 100 pt, corner ≈ 185 pt.
-    let body = NSRect(x: 100 * s, y: 100 * s, width: 824 * s, height: 824 * s)
-    let squircle = NSBezierPath(roundedRect: body, xRadius: 185 * s, yRadius: 185 * s)
-    let shadow = NSShadow()
-    shadow.shadowBlurRadius = 20 * s
-    shadow.shadowOffset = NSSize(width: 0, height: -8 * s)
-    shadow.shadowColor = NSColor.black.withAlphaComponent(0.25)
-    shadow.set()
+    // iOS: the body overflows the canvas by 80 pt a side, so the logo's own rounded tile reaches
+    // past every corner and the system's mask is the only rounding.
+    let body = ios ? NSRect(x: -80 * s, y: -80 * s, width: 1184 * s, height: 1184 * s) : NSRect(x: 100 * s, y: 100 * s, width: 824 * s, height: 824 * s)
+    let squircle = ios ? NSBezierPath(rect: NSRect(x: 0, y: 0, width: 1024 * s, height: 1024 * s))
+        : NSBezierPath(roundedRect: body, xRadius: 185 * s, yRadius: 185 * s)
+    if !ios {
+        let shadow = NSShadow()
+        shadow.shadowBlurRadius = 20 * s
+        shadow.shadowOffset = NSSize(width: 0, height: -8 * s)
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.25)
+        shadow.set()
+    }
     orange.setFill()
     squircle.fill()
     NSShadow().set()
@@ -115,21 +122,34 @@ func render(_ px: Int, dev: Bool) -> Data {
         NSGraphicsContext.saveGraphicsState()
         squircle.addClip()
         ink.setFill()
-        NSRect(x: body.minX, y: body.minY, width: body.width, height: 170 * s).fill()
+        let band = ios ? NSRect(x: 0, y: 0, width: 1024 * s, height: 190 * s) : NSRect(x: body.minX, y: body.minY, width: body.width, height: 170 * s)
+        band.fill()
         let font = NSFont.systemFont(ofSize: 110 * s, weight: .heavy)
         let text = NSAttributedString(string: "DEV", attributes: [
             .font: font, .foregroundColor: NSColor.white, .kern: 14 * s,
         ])
         let size = text.size()
-        text.draw(at: NSPoint(x: body.midX - size.width / 2 + 7 * s, y: body.minY + (170 * s - size.height) / 2 + 6 * s))
+        text.draw(at: NSPoint(x: band.midX - size.width / 2 + 7 * s, y: band.minY + (band.height - size.height) / 2 + 6 * s))
         NSGraphicsContext.restoreGraphicsState()
     }
     NSGraphicsContext.restoreGraphicsState()
+    if ios, let image = rep.cgImage,
+       let opaque = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
+                              space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) {
+        // Drawn again without an alpha channel: a fully opaque RGBA PNG is still refused.
+        opaque.draw(image, in: CGRect(x: 0, y: 0, width: px, height: px))
+        if let flat = opaque.makeImage() { return NSBitmapImageRep(cgImage: flat).representation(using: .png, properties: [:])! }
+    }
     return rep.representation(using: .png, properties: [:])!
 }
 
 let args = Array(CommandLine.arguments.dropFirst())
 let dev = args.contains("--dev")
+// --ios <file.png>: the 1024 px iOS icon only (ios/scripts/build.sh).
+if let i = args.firstIndex(of: "--ios"), i + 1 < args.count {
+    try render(1024, dev: dev, ios: true).write(to: URL(fileURLWithPath: args[i + 1]))
+    exit(0)
+}
 let out = URL(fileURLWithPath: args.first { $0 != "--dev" } ?? "AppIcon.iconset")
 try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
 for size in [16, 32, 128, 256, 512] {
