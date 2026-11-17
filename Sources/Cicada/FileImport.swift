@@ -4,6 +4,16 @@ import Foundation
 import Speech
 import UniformTypeIdentifiers
 
+/// What an import needs from settings: the Mac's `AppSettings`, or the iOS app's own (iOS has none
+/// of the Mac's other settings).
+@MainActor
+protocol ImportSettings: AnyObject {
+    /// "auto" or a `sourceLanguages` locale.
+    var importLanguage: String { get }
+    var speakerVoices: Bool { get }
+    func resolvedTarget(source: String?) -> String
+}
+
 /// Recordings and videos the user brings in: each becomes a meeting record, transcribed on device
 /// faster than real time, one file at a time. It never touches the live pipeline, so a meeting can
 /// be listened to meanwhile; its translations wait behind the live ones (`TranslationService.Kind.file`).
@@ -39,14 +49,15 @@ final class FileImporter: ObservableObject {
     var onFinished: ((_ sessionID: String) -> Void)?
 
     let store: SessionStore
-    let settings: AppSettings
+    let settings: ImportSettings
     let translator: TranslationService
-    let profiles: SpeakerProfileStore
+    /// Known voices matched by name (the Mac's 说话人库); iOS has none yet.
+    let profiles: SpeakerProfileStore?
     private var task: Task<Void, Never>?
     /// The running `SpeechAnalyzer` (macOS 26) or `RecognitionStream`, for 停止转写.
     private var analyzer: AnyObject?
 
-    init(store: SessionStore, settings: AppSettings, translator: TranslationService, profiles: SpeakerProfileStore) {
+    init(store: SessionStore, settings: ImportSettings, translator: TranslationService, profiles: SpeakerProfileStore?) {
         self.store = store
         self.settings = settings
         self.translator = translator
@@ -209,7 +220,8 @@ final class FileImporter: ObservableObject {
                     voices?.tag(line.id, from: line.t, to: k + 1 < sentences.count ? sentences[k + 1].t : end)
                 }
             }
-            if !Recognition.legacy, !Recognition.cloudOnly, #available(macOS 26, *) {
+            // `Recognition.host`: the iOS simulator's stand-in recognizer takes a stream, not a file.
+            if !Recognition.legacy, !Recognition.cloudOnly, Recognition.host == nil, #available(macOS 26, *) {
                 let transcriber = SpeechTranscriber(locale: Locale(identifier: lang.locale), transcriptionOptions: [],
                                                     reportingOptions: [], attributeOptions: [.audioTimeRange])
                 let file = try AVAudioFile(forReading: pcm)
@@ -339,6 +351,10 @@ final class FileImporter: ObservableObject {
 
     private func language(of pcm: URL) async -> Lang {
         if let fixed = sourceLanguages.first(where: { $0.locale == settings.importLanguage }) { return fixed }
+        #if CICADA_IOS
+        // iOS always names the language (对方说); LanguageDetector is the Mac's.
+        return sourceLanguages[0]
+        #else
         let langs = await Self.installed()
         guard langs.count > 1 else { return langs.first ?? sourceLanguages[0] }
         phase = .detecting
@@ -357,6 +373,7 @@ final class FileImporter: ObservableObject {
         debugLog("import: language scores \(scores.map { String(format: "%@=%.2f", $0.key, $0.value) }.sorted())")
         let best = scores.max { $0.value < $1.value }?.key
         return langs.first { $0.locale == best } ?? langs[0]
+        #endif
     }
 
     /// With no long pause the recognizer hands back minutes as one result (a speech, a fluent
@@ -446,7 +463,7 @@ final class ImportVoices {
     /// a 重新转写 that reuses the line ids.
     private var on = true
 
-    init(pcm: URL, store: SessionStore, session id: String, profiles: SpeakerProfileStore) {
+    init(pcm: URL, store: SessionStore, session id: String, profiles: SpeakerProfileStore?) {
         file = try? AVAudioFile(forReading: pcm)
         tagger.profiles = profiles
         tagger.onVoice = { [weak self, weak store] line, voice in

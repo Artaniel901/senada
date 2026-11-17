@@ -449,3 +449,5 @@ func contentLog(_ message: @autoclosure () -> String) {
 }
 
 extension AppSettings: FixSwitches {}
+
+extension AppSettings: ImportSettings {}
