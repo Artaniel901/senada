@@ -11,7 +11,7 @@ Needs ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH for a key that may manage Certific
 Identifiers & Profiles (Admin, or App Manager with that access). Keys and certificates live in
 ~/.cicada-signing (0700); the certificate goes into the login keychain, usable by codesign only.
 """
-import base64, json, os, re, subprocess, sys
+import base64, json, os, re, subprocess, sys, urllib.parse
 sys.path.insert(0, os.path.dirname(__file__))
 from asc import call
 
@@ -72,6 +72,7 @@ def certificate():
         mine = run("openssl", "x509", "-inform", "der", "-in", cer, "-noout", "-serial").split("=")[1].strip().upper()
         for c in r.get("data", []):
             if c["attributes"]["serialNumber"].upper().lstrip("0") == mine.lstrip("0"):
+                into_keychain(key, cer)
                 return c["id"], cer
     os.makedirs(HOME, mode=0o700, exist_ok=True)
     run("openssl", "genrsa", "-out", key, "2048")
@@ -81,20 +82,41 @@ def certificate():
         "certificateType": CERT_TYPE, "csrContent": csr}}}), f"create {CERT_TYPE} certificate")
     with open(cer, "wb") as f:
         f.write(base64.b64decode(r["data"]["attributes"]["certificateContent"]))
-    # Into the login keychain, the key usable by codesign without a prompt.
+    print(f"created {CERT_TYPE} certificate {r['data']['id']}", file=sys.stderr)
+    into_keychain(key, cer)
+    return r["data"]["id"], cer
+
+
+def sha1(cer):
+    return run("openssl", "x509", "-inform", "der", "-in", cer, "-noout", "-fingerprint", "-sha1").split("=")[1].replace(":", "").strip()
+
+
+def into_keychain(key, cer):
+    """The certificate and its key in the login keychain, the key usable by codesign without a prompt."""
+    # The intermediate it is issued by (WWDR G3), shipped inside Xcode; without it the identity
+    # isn't valid and codesign can't use it.
+    # Imported every time; the keychain refuses a duplicate, which is fine.
+    subprocess.run(["security", "import", "/Applications/Xcode.app/Contents/SharedFrameworks/DVTFoundation.framework/Versions/A/Resources/AppleWWDRCA-2030.cer",
+                    "-k", os.path.expanduser("~/Library/Keychains/login.keychain-db")], capture_output=True)
+    if sha1(cer) in run("security", "find-identity", "-v", "-p", "codesigning"):
+        return
     p12, password = f"{HOME}/ios-{KIND}.p12", base64.b64encode(os.urandom(18)).decode()
     pem = run("openssl", "x509", "-inform", "der", "-in", cer)
-    run("openssl", "pkcs12", "-export", "-legacy", "-inkey", key, "-out", p12, "-passout", f"pass:{password}", input=pem)
-    run("security", "import", p12, "-k", os.path.expanduser("~/Library/Keychains/login.keychain-db"),
-        "-P", password, "-T", "/usr/bin/codesign")
-    os.remove(p12)
-    print(f"created {CERT_TYPE} certificate {r['data']['id']} and added it to the login keychain", file=sys.stderr)
-    return r["data"]["id"], cer
+    # OpenSSL 3 writes a cipher the keychain can't read unless told -legacy; macOS's LibreSSL
+    # writes the old one already and doesn't know the flag.
+    legacy = ["-legacy"] if run("openssl", "version").startswith("OpenSSL 3") else []
+    run("openssl", "pkcs12", "-export", *legacy, "-inkey", key, "-out", p12, "-passout", f"pass:{password}", input=pem)
+    try:
+        run("security", "import", p12, "-k", os.path.expanduser("~/Library/Keychains/login.keychain-db"),
+            "-P", password, "-T", "/usr/bin/codesign")
+    finally:
+        os.remove(p12)
+    print("added it to the login keychain", file=sys.stderr)
 
 
 def profile(identifier, bundle, cert, device_ids):
     name = f"Cicada {KIND} {identifier}"
-    _, r = call("GET", f"/v1/profiles?filter[name]={name}&fields[profiles]=name,profileState")
+    _, r = call("GET", f"/v1/profiles?filter[name]={urllib.parse.quote(name)}&fields[profiles]=name,profileState")
     for p in r.get("data", []):   # remade each time, so it always holds today's devices and certificate
         call("DELETE", f"/v1/profiles/{p['id']}")
     rel = {"bundleId": {"data": {"type": "bundleIds", "id": bundle}},
@@ -113,8 +135,8 @@ def profile(identifier, bundle, cert, device_ids):
 bundles = {i: bundle_id(i, n) for i, n in IDS.items()}
 device_ids = devices() if DEV else []
 cert, cer = certificate()
-sha1 = run("openssl", "x509", "-inform", "der", "-in", cer, "-noout", "-fingerprint", "-sha1").split("=")[1].replace(":", "").strip()
+fingerprint = sha1(cer)
 paths = {i: profile(i, b, cert, device_ids) for i, b in bundles.items()}
-print(f"export SIGN_IDENTITY={sha1}")
+print(f"export SIGN_IDENTITY={fingerprint}")
 print(f"export PROFILE='{paths[APP_ID]}'")
 print(f"export PROFILE_LIVE='{paths[APP_ID + '.live']}'")
