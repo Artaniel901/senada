@@ -227,7 +227,7 @@ final class FaceToFace: ObservableObject {
         record(t, from: from, to: to)
         phase = .speaking(side)
         contentLog("FACE [\(from.code)→\(to.code)] \(text) => \(out)")
-        await voice.speak(out, language: to.code, ling: ling.hasKey ? ling : nil)
+        await voice.speak(out, language: to.code, ling: ling.hasKey ? ling : nil, mine: side == .them)
         if phase == .speaking(side) { phase = .idle }
     }
 
@@ -242,7 +242,7 @@ final class FaceToFace: ObservableObject {
         record(t, from: from, to: to)
         phase = .speaking(side)
         turnTask = Task {
-            await voice.speak(translation, language: to.code, ling: ling.hasKey ? ling : nil)
+            await voice.speak(translation, language: to.code, ling: ling.hasKey ? ling : nil, mine: side == .them)
             if phase == .speaking(side) { phase = .idle }
         }
     }
@@ -336,26 +336,41 @@ final class FaceVoice: NSObject, AVSpeechSynthesizerDelegate {
         synth.delegate = self
     }
 
-    func speak(_ text: String, language: String, ling: LingClient?) async {
+    /// `voiceID`: a voice to try (设置 › 念给对方的声音); else the one chosen for the language.
+    /// `mine`: read to me (their words), never in my own cloned voice.
+    func speak(_ text: String, language: String, ling: LingClient?, voiceID: String? = nil, mine: Bool = false) async {
         // One voice at a time: a turn still being read out ends here.
         stop()
         try? FaceAudio.activate()
-        if let ling, let voice = VoiceCatalog.ming(for: language).first, case .ming(let id) = voice.kind {
-            let stream = ling.speech(text, voice: id, language: VoiceCatalog.mingLanguage(for: language))
+        let id = voiceID ?? SpeakVoices.chosenID(for: language, hasKey: ling != nil, mine: mine)
+        if let ling, let stream = Self.stream(text, id: id, language: language, ling: ling) {
             let task = Task { await self.play(stream) }
             streaming = task
-            if await task.value { debugLog("face: spoke with Ming \(id)"); return }
+            if await task.value { debugLog("face: spoke with \(id ?? "-")"); return }
             if Task.isCancelled || streaming == nil { return }
-            debugLog("face: Ming sent nothing, the phone's voice instead")
+            // Ling 不可用时自动换成手机的声音.
+            debugLog("face: Ling sent nothing, the phone's voice instead")
         }
         let u = AVSpeechUtterance(string: text)
-        u.voice = AVSpeechSynthesisVoice(language: Locale(identifier: language).language.minimalIdentifier)
+        let picked = id.flatMap { $0.hasPrefix("system:") ? AVSpeechSynthesisVoice(identifier: String($0.dropFirst(7))) : nil }
+        u.voice = picked ?? AVSpeechSynthesisVoice(language: Locale(identifier: language).language.minimalIdentifier)
             ?? AVSpeechSynthesisVoice(language: language)
         await withCheckedContinuation { c in
             spoken = c
             synth.speak(u)
         }
         debugLog("face: spoke with the phone's voice")
+    }
+
+    /// Ming's voice, or the user's own cloned from their recording; nil for the phone's.
+    private static func stream(_ text: String, id: String?, language: String, ling: LingClient) -> AsyncThrowingStream<Data, Error>? {
+        let lang = VoiceCatalog.mingLanguage(for: language)
+        if id == VoiceCatalog.cloneOption.id {
+            guard let ref = VoiceReference.reference() else { return nil }
+            return ling.speech(text, voice: nil, reference: ref, language: lang)
+        }
+        guard let id, id.hasPrefix("ming:") else { return nil }
+        return ling.speech(text, voice: String(id.dropFirst(5)), language: lang)
     }
 
     /// Plays the chunks as they come; false when none came.

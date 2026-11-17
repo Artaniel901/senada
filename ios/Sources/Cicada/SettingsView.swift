@@ -91,9 +91,13 @@ struct SettingsView: View {
                             .tint(Ink.secondary)
                         }
                         Hairline()
-                        row(Text("念给对方的声音")) {
-                            Text(verbatim: ling.hasKey ? "Ming" : L("手机自带")).foregroundStyle(Ink.secondary)
+                        NavigationLink { VoicesPage(face: model.face) } label: {
+                            row(Text("念给对方的声音")) {
+                                Text(verbatim: voiceSummary).foregroundStyle(Ink.secondary).lineLimit(1)
+                                Chevron()
+                            }
                         }
+                        .buttonStyle(RowPress())
                     }
                     SectionLabel(text: L("快速开始"))
                     Card {
@@ -116,6 +120,7 @@ struct SettingsView: View {
             .background(Ink.ground)
             .navigationDestination(isPresented: $model.showWordList) { WordListPage(vocabulary: model.vocabulary) }
             .navigationDestination(isPresented: $model.showQuickStart) { QuickStartPage() }
+            .navigationDestination(isPresented: $model.showVoices) { VoicesPage(face: model.face) }
             .toolbar(sheet ? .visible : .hidden, for: .navigationBar)
             .navigationTitle(sheet ? Text("设置") : Text(""))
             .navigationBarTitleDisplayMode(.inline)
@@ -127,6 +132,24 @@ struct SettingsView: View {
         }
         .onChange(of: voices) { TranscriptExport.voices = voices; model.objectWillChange.send() }
         .tint(Ink.ink)
+    }
+
+    /// A row with its one grey helper line under it.
+    private func helped<R: View>(_ row: R, _ help: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            row
+            Text(verbatim: help).font(.footnote).foregroundStyle(Ink.secondary)
+                .padding(.horizontal, 16).padding(.top, -6).padding(.bottom, 10)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// 念给对方的声音 at a glance: the voice the other person hears.
+    private var voiceSummary: String {
+        let lang = model.face.theirs.code
+        let id = SpeakVoices.chosenID(for: lang, hasKey: ling.hasKey)
+        if id == VoiceCatalog.cloneOption.id { return L("我自己的声音") }
+        return VoiceCatalog.options(for: lang).first { $0.id == id }?.name ?? L("手机自带")
     }
 
     private func row<V: View>(_ title: Text, @ViewBuilder value: () -> V) -> some View {

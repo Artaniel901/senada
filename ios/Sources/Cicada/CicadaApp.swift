@@ -131,6 +131,8 @@ final class AppModel: ObservableObject {
     /// 面对面同声传译 (FaceView), over everything while it is open.
     lazy var face = FaceToFace(store: store, translator: translator, ling: ling)
     @Published var showFace = false
+    /// 设置 › 念给对方的声音, pushed (a debug command opens it).
+    @Published var showVoices = false
     /// 设置 › 快速开始, pushed (a debug command opens it).
     @Published var showQuickStart = false
     /// The meeting whose 导出 sheet is open.

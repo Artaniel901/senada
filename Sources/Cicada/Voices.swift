@@ -161,9 +161,7 @@ enum VoiceReference {
         try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder.path)
         if fm.fileExists(atPath: audioURL.path) { try fm.removeItem(at: audioURL) }
         try fm.copyItem(at: wav, to: audioURL)
-        #if !CICADA_IOS
         trim(audioURL)
-        #endif
         try Data(text.utf8).write(to: textURL)
         for url in [audioURL, textURL] {
             try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
@@ -181,7 +179,8 @@ enum VoiceReference {
     // MARK: Pace
 
     #if !CICADA_IOS
-    // Mac app only, with the voice recorder below: it scores with the speak test's tokens (SpeakTest.swift).
+    // Pace is Mac app only, with the voice recorder below: it scores with the speak test's tokens
+    // (SpeakTest.swift). Trimming is shared: the iOS recorder trims what it saves too.
 
     /// Ming copies the recording's pace into every sentence: a recital at 1.7 characters a second
     /// made each sentence about 4× as long as the built-in voice says it. Below these (characters
@@ -208,6 +207,8 @@ enum VoiceReference {
         guard let w = speechWindows(samples, sampleRate: sampleRate) else { return nil }
         return Double(w.last - w.first + 1) * Double(w.size) / sampleRate
     }
+
+    #endif
 
     /// The samples from 0.2 s before the reading to 0.2 s after it. Ming copies the clip's ending:
     /// a second of silence after the last word (the pause before 读完了) made every cloned
@@ -249,6 +250,7 @@ enum VoiceReference {
         }
     }
 
+    #if !CICADA_IOS
     /// The saved recording, trimmed once: recordings made before trimming existed end in the pause.
     private static var checkedTrim: Date?
     static func trimSaved() {
@@ -257,6 +259,8 @@ enum VoiceReference {
         if trim(audioURL) { debugLog("voice clone: trimmed the saved recording to \(String(format: "%.1f", duration)) s") }
         checkedTrim = (try? audioURL.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
     }
+
+    #endif
 
     private static func speechWindows(_ samples: [Float], sampleRate: Double) -> (first: Int, last: Int, size: Int)? {
         let size = max(1, Int(sampleRate * 0.02))
@@ -276,6 +280,7 @@ enum VoiceReference {
         return (first, last, size)
     }
 
+    #if !CICADA_IOS
     /// The pace of a WAV and what it says.
     static func pace(of url: URL, text: String) -> Double? {
         guard let f = try? AVAudioFile(forReading: url),
