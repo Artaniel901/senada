@@ -24,7 +24,11 @@ struct RecordsSplit: View {
                     HomeTitle(trailing: AnyView(
                         ImportMenu { GlassIcon(systemName: "arrow.down.to.line") }))
                     .padding(.top, 6)
-                    ListenBar().padding(.top, 16)
+                    HStack(spacing: 10) {
+                        ListenBar()
+                        if !room.isRunning { FaceButton() }
+                    }
+                    .padding(.top, 16)
                     ImportCard(importer: model.importer)
                     if store.sessions.isEmpty {
                         EmptyRecords().frame(maxWidth: .infinity).padding(.top, 40)
@@ -102,7 +106,11 @@ struct PadRoot: View {
                     .buttonStyle(.plain).accessibilityLabel(Text("设置"))
             }))
             .padding(.horizontal, 4)
-            ListenBar(onGlass: true).padding(.top, 14).padding(.bottom, 12)
+            HStack(spacing: 8) {
+                ListenBar(onGlass: true)
+                if !room.isRunning { FaceButton(onGlass: true) }
+            }
+            .padding(.top, 14).padding(.bottom, 12)
             ImportCard(importer: model.importer).padding(.top, -22).padding(.bottom, 12)
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Ink.secondary)

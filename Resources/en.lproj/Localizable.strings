@@ -1586,3 +1586,16 @@
 "文字记录和纪要" = "Transcript and notes";
 "直接发给同事" = "Ready to send to colleagues";
 "配原声或视频" = "For the recording or video";
+
+/* iOS: face to face */
+"面对面" = "Face to Face";
+"面对面同声传译" = "Face-to-Face Interpreting";
+"我说和对方说" = "My language and theirs";
+"正在听你说" = "Listening to you";
+"没听清，按住再说一次" = "Didn't catch that. Hold and say it again";
+"没翻译出来，再说一次" = "Couldn't translate that. Say it again";
+"请说…" = "Speak now…";
+"正在念给对方" = "Reading it out";
+"按住下面的按钮说话" = "Hold the button below and speak";
+"松开就念给对方" = "Let go to read it out";
+"对方在说话" = "They're speaking";

@@ -42,6 +42,8 @@ enum Pref {
     static let askNames = "askNames"
     /// 声音来源 (iOS only): "room", people at the table, or "speaker", video this phone plays aloud.
     static let hear = "iosHear"
+    /// 面对面's 我说: a `sourceLanguages` locale (对方说 is `source`, as when listening).
+    static let myLang = "iosMyLang"
     /// 第一次打开's three steps are done (or skipped).
     static let welcomed = "iosWelcomed"
     static var speakerMode: Bool { UserDefaults.standard.string(forKey: hear) == "speaker" }
@@ -108,6 +110,9 @@ final class AppModel: ObservableObject {
         ImportBackground.importer = i
         return i
     }()
+    /// 面对面同声传译 (FaceView), over everything while it is open.
+    lazy var face = FaceToFace(store: store, translator: translator, ling: ling)
+    @Published var showFace = false
     /// The meeting whose 导出 sheet is open.
     @Published var exporting: String?
     /// Why a picked file wasn't imported.

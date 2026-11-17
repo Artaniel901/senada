@@ -251,6 +251,29 @@ extension AppModel {
             if let f = ExportFormat(rawValue: p.first ?? ""), let s = store.session(p.count > 1 ? p[1] : selection ?? store.sessions.first?.id) {
                 debugLog("export file: \((try? f.file(s).path) ?? "failed")")
             }
+        // 面对面: face opens it, faceClose ends it; faceSay:<me|them>=<text> is a press heard as that
+        // text without the microphone; facePress / faceRelease:<me|them> hold and let go for real.
+        case "face": openFace()
+        case "faceClose": closeFace()
+        case "faceSay":
+            let p = arg.split(separator: "=", maxSplits: 1).map(String.init)
+            guard p.count == 2, let side = FaceToFace.Side(rawValue: p[0]) else { break }
+            face.debugText = p[1]
+            face.press(side)
+            face.release(side)
+        case "faceTurn":
+            // faceTurn:<me|them>=<said>|<translation>
+            let p = arg.split(separator: "=", maxSplits: 1).map(String.init)
+            let q = p.count == 2 ? p[1].split(separator: "|", maxSplits: 1).map(String.init) : []
+            if q.count == 2, let side = FaceToFace.Side(rawValue: p[0]) { face.debugTurn(side, said: q[0], translation: q[1]) }
+        case "facePress":if let side = FaceToFace.Side(rawValue: arg) { face.press(side) }
+        case "faceRelease": if let side = FaceToFace.Side(rawValue: arg) { face.release(side) }
+        case "faceLangs":
+            // faceLangs:<my locale>,<their locale>
+            let p = arg.split(separator: ",").map(String.init)
+            if p.count == 2, let m = FaceToFace.lang(p[0]), let t = FaceToFace.lang(p[1]) { face.setLanguages(mine: m, theirs: t) }
+        case "faceState":
+            debugLog("face active=\(face.active) phase=\(face.phase) heard=\(face.heard.count) last=\(face.last.map { "\($0.side.rawValue) \($0.said.count)/\($0.translation.count)" } ?? "-") problem=\(face.problem)")
         case "importState":
             debugLog("import busy=\(importer.busy) phase=\(importer.phase) progress=\(String(format: "%.2f", importer.progress)) queue=\(importer.queue.count) current=\(importer.current?.id ?? "-")")
         case "state":
