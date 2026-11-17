@@ -203,7 +203,7 @@ struct SpeakerChips: View {
 
     var body: some View {
         let names = SpeakerLabels.names(session)
-        let voices = voicesOn ? SpeakerLabels.voiceNumbers(session.lines) : [:]
+        let voices = voicesOn ? SpeakerLabels.voiceNumbers(session) : [:]
         // Voice id by its speaker number.
         let byNumber = Dictionary(uniqueKeysWithValues: voices.map { ($1, $0) })
         let numbers = byNumber.keys.sorted()
@@ -307,7 +307,8 @@ struct TranscriptList: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             if inline { time(l, on) }
-                            if session.sourceFile == nil {
+                            // An imported file names a line once its voice is told apart (the Mac's saysWho).
+                            if session.sourceFile == nil || numbers[l.id] != nil {
                                 Text(TranscriptExport.speakerName(l, numbers, names))
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(l.speaker == "me" ? Ink.accentText : (focus == nil || mine ? Ink.ink : Ink.tertiary))

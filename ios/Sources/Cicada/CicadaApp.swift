@@ -372,7 +372,7 @@ final class AppModel: ObservableObject {
     /// Name a voice ("" keeps 说话人 N, nil goes back to Ling's guess).
     func renameSpeaker(session id: String, voice: Int, _ name: String?) {
         guard let s = store.session(id) else { return }
-        let n = SpeakerLabels.voiceNumbers(s.lines)[voice] ?? 0
+        let n = SpeakerLabels.voiceNumbers(s)[voice] ?? 0
         let before = SpeakerLabels.label(n, SpeakerLabels.names(s))
         speakerEdit(id) { store.setVoiceName(id, voice: voice, name) }
         let after = store.session(id).map { SpeakerLabels.label(n, SpeakerLabels.names($0)) } ?? before
@@ -382,7 +382,7 @@ final class AppModel: ObservableObject {
     /// Two voices are one person.
     func mergeSpeaker(session id: String, _ from: Int, into: Int) {
         guard let s = store.session(id) else { return }
-        let numbers = SpeakerLabels.voiceNumbers(s.lines), names = SpeakerLabels.names(s)
+        let numbers = SpeakerLabels.voiceNumbers(s), names = SpeakerLabels.names(s)
         let a = SpeakerLabels.label(numbers[from] ?? 0, names), b = SpeakerLabels.label(numbers[into] ?? 0, names)
         speakerEdit(id) { store.mergeVoice(id, from, into: into) }
         speakerUndo?.text = L("\(a) 已并入 \(b)")

@@ -274,7 +274,7 @@ struct RecordRow: View {
     /// "10:02 · 48 分钟 · 3 人 · 英 → 中 · 会议室", as in the design's rows.
     static func meta(_ s: Session, voices on: Bool) -> String {
         var parts = [RecordList.when(s), RecordList.length(s)]
-        let voices = on ? SpeakerLabels.voiceNumbers(s.lines).count : 0
+        let voices = on ? SpeakerLabels.voiceNumbers(s).count : 0
         if voices >= 2 { parts.append(L("\(voices) 人")) }
         if let pair = RecordList.pair(s, short: true) { parts.append(pair) }
         if s.sourceFile != nil { parts.append(L("导入")) } else if s.room == true { parts.append(L("会议室")) }
