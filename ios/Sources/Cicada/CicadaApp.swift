@@ -108,6 +108,8 @@ final class AppModel: ObservableObject {
         ImportBackground.importer = i
         return i
     }()
+    /// The meeting whose 导出 sheet is open.
+    @Published var exporting: String?
     /// Why a picked file wasn't imported.
     @Published var importProblem: String?
     let pip = PiPSubtitles()

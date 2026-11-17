@@ -1578,3 +1578,11 @@
 "切到别的 app 也会继续" = "Keeps going in other apps";
 "还有 %lld 个文件在排队" = "%lld more files waiting";
 "停止" = "Stop";
+
+/* iOS: export */
+"格式" = "Format";
+"分享" = "Share";
+"SRT 字幕" = "SRT Subtitles";
+"文字记录和纪要" = "Transcript and notes";
+"直接发给同事" = "Ready to send to colleagues";
+"配原声或视频" = "For the recording or video";

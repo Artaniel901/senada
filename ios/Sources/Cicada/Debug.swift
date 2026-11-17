@@ -239,6 +239,18 @@ extension AppModel {
             if p.count == 2, let t = vocabulary.terms.first(where: { $0.word == p[0] }) { addHeard(p[1], to: t) }
         case "wordDelete":
             if let t = vocabulary.terms.first(where: { $0.word == arg }) { deleteWord(t) }
+        case "export":
+            // export:[markdown|word|srt] opens 导出 on the open meeting (else the newest) with that format
+            let id = selection ?? store.sessions.first?.id
+            if !arg.isEmpty { UserDefaults.standard.set(arg, forKey: "iosExportFormat") }
+            selection = id
+            exporting = id
+        case "exportFile":
+            // exportFile:<format>[,<id>]: writes the file and logs its path, for checking it on the Mac
+            let p = arg.split(separator: ",").map(String.init)
+            if let f = ExportFormat(rawValue: p.first ?? ""), let s = store.session(p.count > 1 ? p[1] : selection ?? store.sessions.first?.id) {
+                debugLog("export file: \((try? f.file(s).path) ?? "failed")")
+            }
         case "importState":
             debugLog("import busy=\(importer.busy) phase=\(importer.phase) progress=\(String(format: "%.2f", importer.progress)) queue=\(importer.queue.count) current=\(importer.current?.id ?? "-")")
         case "state":

@@ -102,13 +102,15 @@ struct RecordView: View {
                 }
                 .disabled(notes.generatingID != nil || session.lines.isEmpty)
                 .accessibilityLabel(Text("生成纪要"))
-                ShareLink(item: TranscriptExport.markdown(session), subject: Text(session.displayTitle)) {
-                    Image(systemName: "square.and.arrow.up")
-                }
-                .accessibilityLabel(Text("导出"))
+                Button { model.exporting = session.id } label: { Image(systemName: "square.and.arrow.up") }
+                    .disabled(session.lines.isEmpty)
+                    .accessibilityLabel(Text("导出"))
             }
         }
         .tint(Ink.ink)
+        .sheet(isPresented: Binding(get: { model.exporting == session.id }, set: { if !$0 { model.exporting = nil } })) {
+            ExportSheet(session: session)
+        }
         .alert(Text("生成纪要"), isPresented: $needsKey) {
             Button("去填 key") { model.selection = nil; model.searchPath = []; model.tab = .settings; model.showSettings = true }
             Button("取消", role: .cancel) {}
