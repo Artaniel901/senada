@@ -50,11 +50,22 @@ struct FaceView: View {
                 }
                 .disabled(face.phase != .idle)
                 .accessibilityLabel(Text("我说和对方说"))
-                // Balances the close button, so the languages sit in the middle.
-                Color.clear.frame(width: 44, height: 44)
+                // 不用按键, where a spacer balanced the close button.
+                Button { face.setHandsFree(!face.handsFree) } label: {
+                    Image(systemName: face.handsFree ? "hand.raised.slash.fill" : "hand.raised.slash")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(face.handsFree ? .white : Ink.ink)
+                        .frame(width: 44, height: 44)
+                        .background(face.handsFree ? Ink.ink : Color.white, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("不用按键"))
+                .accessibilityAddTraits(face.handsFree ? .isSelected : [])
             }
             if !face.problem.isEmpty {
                 Text(verbatim: face.problem).font(.footnote).foregroundStyle(Ink.accentText)
+            } else if face.handsFree {
+                Text("不用按键 · 说完停一下就翻译，念完轮到对方").font(.footnote.weight(.semibold)).foregroundStyle(Ink.secondary)
             } else if case .hearing(.me) = face.phase {
                 HStack(spacing: 6) { LiveDot(); Text("正在听你说") }.font(.footnote.weight(.semibold)).foregroundStyle(Ink.accentText)
             }
@@ -95,8 +106,12 @@ private struct FaceHalf: View {
                 Text(verbatim: small).font(.subheadline).foregroundStyle(Ink.tertiary).lineLimit(3)
             }
             Spacer(minLength: 0)
-            HoldButton(face: face, side: side, label: buttonLabel)
-                .frame(maxWidth: .infinity)
+            if face.handsFree {
+                TurnButton(face: face, side: side, bundle: bundle).frame(maxWidth: .infinity)
+            } else {
+                HoldButton(face: face, side: side, label: buttonLabel)
+                    .frame(maxWidth: .infinity)
+            }
         }
         .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -203,7 +218,36 @@ private struct HoldButton: View {
     }
 }
 
-/// 面对面 beside 开始听 on the home screen.
+/// 不用按键: the side being heard shows it (in its own language); a tap on the other gives it the turn.
+private struct TurnButton: View {
+    @ObservedObject var face: FaceToFace
+    let side: FaceToFace.Side
+    let bundle: Bundle
+
+    private var hearing: Bool { face.phase == .hearing(side) }
+
+    var body: some View {
+        Button { face.giveTurn(side) } label: {
+            VStack(spacing: 10) {
+                ZStack {
+                    Circle().fill(hearing ? Ink.accent : Ink.ground).frame(width: 64, height: 64)
+                    Image(systemName: hearing ? "waveform" : "hand.tap").font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(hearing ? .white : Ink.ink)
+                        .symbolEffect(.variableColor.iterative, isActive: hearing)
+                }
+                Text(verbatim: hearing ? String(localized: "在听你说 · 停一下就翻译", bundle: bundle)
+                     : String(localized: "轮到你时点这里", bundle: bundle))
+                    .font(.subheadline.weight(hearing ? .semibold : .regular))
+                    .foregroundStyle(hearing ? Ink.accentText : Ink.secondary)
+            }
+            .frame(minHeight: 110)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .sensoryFeedback(.impact(weight: .light), trigger: hearing)
+    }
+}
+
 /// 面对面 under 开始听, a row of its own as tall as it: the icon and the name at full size, and
 /// the languages and what happens (the phone reads it out), so it doesn't pass for another 开始听.
 struct FaceRow: View {

@@ -53,6 +53,17 @@ final class FaceToFace: ObservableObject {
     /// Debug (`faceSay:`): a press heard as this text, without the microphone.
     var debugText: String?
 
+    /// 不用按键: no holding. The two sides take turns: the side whose turn it is is heard until it
+    /// pauses (the Mac's HandsFreeDetector on the mic's level), then translated and read out, and the
+    /// turn passes across the table. Nothing listens while the phone speaks, so it doesn't hear itself.
+    /// A tap on a side gives it the turn.
+    @Published private(set) var handsFree = UserDefaults.standard.bool(forKey: FaceToFace.handsFreeKey)
+    @Published private(set) var turnSide: Side = .me
+    static let handsFreeKey = "iosFaceHandsFree"
+    private var detector = HandsFreeDetector()
+    /// Turns in a row that heard nothing: after a few, hands-free waits for a tap instead of listening on.
+    private var misses = 0
+
     init(store: SessionStore, translator: TranslationService, ling: LingClient) {
         self.store = store
         self.translator = translator
@@ -60,6 +71,9 @@ final class FaceToFace: ObservableObject {
         mine = Self.lang(UserDefaults.standard.string(forKey: Pref.myLang)) ?? Self.defaultMine
         theirs = Pref.sourceLang
         if theirs == mine { theirs = sourceLanguages.first { $0 != mine } ?? sourceLanguages[0] }
+        mic.onLevel = { [weak self] rms, seconds in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.level(rms, seconds) } }
+        }
     }
 
     static func lang(_ locale: String?) -> Lang? { sourceLanguages.first { $0.locale == locale } }
@@ -90,6 +104,8 @@ final class FaceToFace: ObservableObject {
         last = nil
         problem = ""
         debugLog("face: open \(mine.locale) ⇄ \(theirs.locale)")
+        // 不用按键 stays on from last time: I start.
+        if handsFree { turnSide = .me; misses = 0; listenNext(after: 0.3) }
     }
 
     /// 结束: the record is kept when anyone was heard.
@@ -174,6 +190,7 @@ final class FaceToFace: ObservableObject {
             guard text.contains(where: \.isLetter) else {
                 phase = .idle
                 heard = ""
+                if handsFree { turnOver(side, spoken: false); return }
                 problem = L("没听清，按住再说一次")
                 return
             }
@@ -214,9 +231,10 @@ final class FaceToFace: ObservableObject {
             guard phase == .translating(side) else { return }
             phase = .idle
             // Nothing reachable and no key: saying it again won't help, a key (or a network) will.
-            problem = translator.health.googleDown && !ling.hasKey ? L("连不上翻译，填 Ling key 后不用代理也能用")
+            problem = translator.health.googleDown && !ling.hasKey && ling.provider.id == .ling ? L("连不上翻译，填 Ling key 后不用代理也能用")
                 : translator.health.googleDown ? L("网络连不上，连上后再说一次") : L("没翻译出来，再说一次")
             debugLog("face: translation failed")
+            turnOver(side, spoken: false)
             return
         }
         guard phase == .translating(side) else { return }
@@ -228,7 +246,7 @@ final class FaceToFace: ObservableObject {
         phase = .speaking(side)
         contentLog("FACE [\(from.code)→\(to.code)] \(text) => \(out)")
         await voice.speak(out, language: to.code, ling: ling.hasKey ? ling : nil, mine: side == .them)
-        if phase == .speaking(side) { phase = .idle }
+        if phase == .speaking(side) { phase = .idle; turnOver(side, spoken: true) }
     }
 
     /// Debug (`faceTurn:`): a turn with its translation given, to check the record and the voice
@@ -258,6 +276,69 @@ final class FaceToFace: ObservableObject {
                                     src: t.said, dst: t.translation, srcLang: from.code, dstLang: to.code))
     }
 
+    // MARK: 不用按键
+
+    func setHandsFree(_ on: Bool) {
+        handsFree = on
+        UserDefaults.standard.set(on, forKey: Self.handsFreeKey)
+        debugLog("face: hands-free \(on)")
+        misses = 0
+        if on {
+            turnSide = .me
+            listenNext()
+        } else if case .hearing = phase {
+            cancelTurn()
+            phase = .idle
+            heard = ""
+        }
+    }
+
+    /// A tap on a side (hands-free): it has the turn now.
+    func giveTurn(_ side: Side) {
+        guard handsFree, active else { return }
+        if case .hearing(let s) = phase, s == side { return }
+        if case .speaking = phase { voice.stop() }
+        cancelTurn()
+        phase = .idle
+        heard = ""
+        problem = ""
+        misses = 0
+        turnSide = side
+        listenNext()
+    }
+
+    private func listenNext(after delay: Double = 0) {
+        guard handsFree, active else { return }
+        Task {
+            if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+            guard handsFree, active, phase == .idle else { return }
+            guard misses < 3 else { debugLog("face: hands-free waits for a tap"); return }
+            detector.reset()
+            press(turnSide)
+        }
+    }
+
+    /// The mic's level while a side is heard: its pause ends the turn.
+    private func level(_ rms: Float, _ seconds: Double) {
+        guard handsFree, case .hearing(let side) = phase else { return }
+        if case .ended = detector.feed(rms: rms, seconds: seconds) {
+            debugLog("face: hands-free heard a pause")
+            release(side)
+        }
+    }
+
+    /// After a turn: read out → the other side; nothing heard or not translated → the same side again.
+    private func turnOver(_ side: Side, spoken: Bool) {
+        guard handsFree else { return }
+        if spoken {
+            misses = 0
+            turnSide = side == .me ? .them : .me
+        } else {
+            misses += 1
+        }
+        listenNext(after: 0.4)
+    }
+
     private func cancelTurn() {
         turnTask?.cancel()
         turnTask = nil
@@ -273,6 +354,8 @@ final class FaceToFace: ObservableObject {
         phase = .idle
         heard = ""
         problem = message
+        // Listening on would fail the same way.
+        if handsFree { misses = 3 }
     }
 }
 
@@ -282,6 +365,8 @@ final class FaceMic: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.indaloop.cicada.face")
     private let convert = PCMConverter()
     private var stream: RecognitionStream?
+    /// Each block's loudness (RMS) and length, on the audio thread: 不用按键 hears the pauses.
+    var onLevel: ((Float, Double) -> Void)?
 
     func start(into stream: RecognitionStream) throws {
         try FaceAudio.activate()
@@ -290,6 +375,11 @@ final class FaceMic: @unchecked Sendable {
         let input = engine.inputNode
         input.installTap(onBus: 0, bufferSize: 4096, format: input.outputFormat(forBus: 0)) { [weak self] buffer, _ in
             guard let self, let copy = buffer.copy() as? AVAudioPCMBuffer else { return }
+            if let onLevel = self.onLevel, let ch = buffer.floatChannelData?[0], buffer.frameLength > 0 {
+                var sum: Float = 0
+                for i in 0..<Int(buffer.frameLength) { sum += ch[i] * ch[i] }
+                onLevel((sum / Float(buffer.frameLength)).squareRoot(), Double(buffer.frameLength) / buffer.format.sampleRate)
+            }
             self.queue.async {
                 guard let s = self.stream, let c = self.convert.convert(copy, to: s.format) else { return }
                 s.append(c)
@@ -342,7 +432,7 @@ final class FaceVoice: NSObject, AVSpeechSynthesizerDelegate {
         // One voice at a time: a turn still being read out ends here.
         stop()
         try? FaceAudio.activate()
-        let id = voiceID ?? SpeakVoices.chosenID(for: language, hasKey: ling != nil, mine: mine)
+        let id = voiceID ?? SpeakVoices.chosenID(for: language, hasKey: ling != nil, mine: mine, clones: ling?.clones ?? false)
         if let ling, let stream = Self.stream(text, id: id, language: language, ling: ling) {
             let task = Task { await self.play(stream) }
             streaming = task
@@ -366,9 +456,12 @@ final class FaceVoice: NSObject, AVSpeechSynthesizerDelegate {
     private static func stream(_ text: String, id: String?, language: String, ling: LingClient) -> AsyncThrowingStream<Data, Error>? {
         let lang = VoiceCatalog.mingLanguage(for: language)
         if id == VoiceCatalog.cloneOption.id {
+            guard ling.clones else { return nil }
             guard let ref = VoiceReference.reference() else { return nil }
             return ling.speech(text, voice: nil, reference: ref, language: lang)
         }
+        // Another service's speech model: its voice by name, the same in every language.
+        if let id, id.hasPrefix("cloud:") { return ling.speech(text, voice: String(id.dropFirst(6))) }
         guard let id, id.hasPrefix("ming:") else { return nil }
         return ling.speech(text, voice: String(id.dropFirst(5)), language: lang)
     }
