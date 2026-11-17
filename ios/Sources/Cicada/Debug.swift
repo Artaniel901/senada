@@ -82,6 +82,13 @@ extension AppModel {
         case "interrupt":
             // interrupt:began|ended, what the system sends for a call or Siri
             room.debugInterrupt(arg != "ended")
+        case "quickStart":
+            tab = .settings
+            showSettings = true
+            showQuickStart = arg != "off"
+        case "intent":
+            // intent:start|stop|pause, as the Action button, Siri or the Live Activity's buttons
+            IntentHub.send(arg == "stop" ? .stop : arg == "pause" ? .togglePause : .start)
         case "pip":
             pip.start()
         case "livePage":

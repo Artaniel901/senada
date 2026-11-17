@@ -3,11 +3,54 @@ import SwiftUI
 import WidgetKit
 
 // The CicadaLive extension: draws ListenActivity (ios/Sources/Cicada/ListenActivity.swift) on the
-// lock screen and in the Dynamic Island. Built by ios/scripts/build.sh into PlugIns/CicadaLive.appex.
+// lock screen and in the Dynamic Island, and 开始听 in Control Center. Built by ios/scripts/build.sh
+// into PlugIns/CicadaLive.appex. Its buttons are App Intents (ios/Sources/Cicada/Intents.swift),
+// which run in the app.
 
 @main
 struct CicadaLiveBundle: WidgetBundle {
-    var body: some Widget { ListenLiveActivity() }
+    var body: some Widget {
+        ListenLiveActivity()
+        StartListeningControl()
+    }
+}
+
+/// 开始听 in Control Center and on the lock screen.
+struct StartListeningControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: "com.wquguru.cicada.start") {
+            ControlWidgetButton(action: StartListeningIntent()) {
+                Label("开始听", systemImage: "mic.fill")
+            }
+        }
+        .displayName("开始听")
+        .description("用麦克风听会议室，出实时双语字幕和纪要")
+    }
+}
+
+/// 暂停 / 继续 and 结束并出纪要, on the lock screen and in the expanded Dynamic Island.
+private struct LiveButtons: View {
+    let paused: Bool
+    var dark = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(intent: PauseListeningIntent()) {
+                Text(paused ? "继续" : "暂停").font(.subheadline.weight(.semibold))
+                    .foregroundStyle(dark ? .white : LiveInk.ink)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .background((dark ? Color.white : LiveInk.ink).opacity(dark ? 0.16 : 0.07), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            Button(intent: StopListeningIntent()) {
+                Text("结束并出纪要").font(.subheadline.weight(.semibold))
+                    .foregroundStyle(dark ? LiveInk.ink : .white)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .background(dark ? Color.white : LiveInk.ink, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+    }
 }
 
 private enum LiveInk {
@@ -48,9 +91,13 @@ struct ListenLiveActivity: Widget {
                     LiveLogo(size: 34)
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 6) {
-                            Circle().fill(LiveInk.accent).frame(width: 7, height: 7)
-                            Text("正在听").font(.footnote.weight(.semibold)).foregroundStyle(LiveInk.accent)
-                            Elapsed(since: context.attributes.startedAt).font(.footnote.weight(.semibold)).foregroundStyle(LiveInk.accent)
+                            Circle().fill(context.state.paused ? LiveInk.grey : LiveInk.accent).frame(width: 7, height: 7)
+                            if context.state.paused {
+                                Text("已暂停").font(.footnote.weight(.semibold)).foregroundStyle(LiveInk.grey)
+                            } else {
+                                Text("正在听").font(.footnote.weight(.semibold)).foregroundStyle(LiveInk.accent)
+                                Elapsed(since: context.attributes.startedAt).font(.footnote.weight(.semibold)).foregroundStyle(LiveInk.accent)
+                            }
                         }
                         Text(verbatim: "\(String(localized: "会议室")) · \(context.attributes.pair)")
                             .font(.subheadline.weight(.semibold)).foregroundStyle(LiveInk.ink)
@@ -65,6 +112,7 @@ struct ListenLiveActivity: Widget {
                 } else {
                     Text("开始说话后，字幕会出现在这里").font(.callout).foregroundStyle(LiveInk.grey)
                 }
+                LiveButtons(paused: context.state.paused)
             }
             .padding(16)
             .activityBackgroundTint(LiveInk.ground.opacity(0.92))
@@ -88,6 +136,7 @@ struct ListenLiveActivity: Widget {
                             .font(.callout).foregroundStyle(.white).lineLimit(2)
                         Text(verbatim: "\(String(localized: "会议室")) · \(context.attributes.pair)")
                             .font(.caption2).foregroundStyle(.white.opacity(0.6))
+                        LiveButtons(paused: context.state.paused, dark: true).padding(.top, 6)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 4)

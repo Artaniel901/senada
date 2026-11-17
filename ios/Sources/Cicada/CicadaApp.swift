@@ -113,6 +113,8 @@ final class AppModel: ObservableObject {
     /// 面对面同声传译 (FaceView), over everything while it is open.
     lazy var face = FaceToFace(store: store, translator: translator, ling: ling)
     @Published var showFace = false
+    /// 设置 › 快速开始, pushed (a debug command opens it).
+    @Published var showQuickStart = false
     /// The meeting whose 导出 sheet is open.
     @Published var exporting: String?
     /// Why a picked file wasn't imported.
@@ -172,6 +174,7 @@ final class AppModel: ObservableObject {
         HostRecognizer.install()
         #endif
         DebugChannel.listen(self)
+        IntentHub.run = { [weak self] action in self?.intent(action) }
         debugLog("ios launch \(DevBuild.label ?? "release") sessions=\(store.sessions.count) key=\(ling.hasKey)")
         if ling.hasKey { Task { await ling.check() } }
     }
@@ -210,8 +213,22 @@ final class AppModel: ObservableObject {
         liveActivity.update(line: shown)
     }
 
+    /// 快速开始 and the Live Activity's buttons.
+    func intent(_ action: IntentHub.Action) {
+        debugLog("intent: \(action)")
+        switch action {
+        case .start:
+            if showFace { closeFace() }
+            showWelcome = false
+            startListening()
+        case .stop: stopListening()
+        case .togglePause: room.setPaused(!room.paused)
+        }
+    }
+
     private func listeningChanged() {
         objectWillChange.send()
+        liveActivity.setPaused(room.paused)
         pip.setEnabled(room.isRunning && room.speakerMode)
         if room.isRunning, let start = room.startedAt {
             liveActivity.start(startedAt: start, pair: Pref.pairText(room.languagePair.source, room.languagePair.target))

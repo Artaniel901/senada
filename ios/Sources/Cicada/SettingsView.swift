@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// 设置, as the design's: grey section labels over white cards. Only what the app does today:
-/// the Ling key and model (纪要), the language meetings are translated into, and 说话人识别.
-/// 同声传译 and 快速开始 come with M3 and M4.
+/// 设置, as the design's: grey section labels over white cards: the Ling key and model (纪要), the
+/// language meetings are translated into, 说话人识别, 面对面's own language, and 快速开始.
 struct SettingsView: View {
     /// iPad shows it as a sheet, with 完成.
     var sheet = false
@@ -78,6 +77,31 @@ struct SettingsView: View {
                             .tint(Ink.secondary)
                         }
                     }
+                    SectionLabel(text: L("面对面"))
+                    Card {
+                        row(Text("我说")) {
+                            Picker(selection: Binding(get: { model.face.mine.locale }, set: { l in
+                                guard let m = FaceToFace.lang(l) else { return }
+                                model.face.setLanguages(mine: m, theirs: m == model.face.theirs ? model.face.mine : model.face.theirs)
+                                model.objectWillChange.send()
+                            })) {
+                                ForEach(sourceLanguages, id: \.locale) { Text(verbatim: $0.name).tag($0.locale) }
+                            } label: { Text("我说") }
+                            .pickerStyle(.menu)
+                            .tint(Ink.secondary)
+                        }
+                        Hairline()
+                        row(Text("念给对方的声音")) {
+                            Text(verbatim: ling.hasKey ? "Ming" : L("手机自带")).foregroundStyle(Ink.secondary)
+                        }
+                    }
+                    SectionLabel(text: L("快速开始"))
+                    Card {
+                        NavigationLink { QuickStartPage() } label: {
+                            row(Text("操作按钮、控制中心和 Siri")) { Chevron() }
+                        }
+                        .buttonStyle(RowPress())
+                    }
                     Text(L("版本 \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")"))
                         .font(.footnote).foregroundStyle(Ink.tertiary)
                         .frame(maxWidth: .infinity)
@@ -91,6 +115,7 @@ struct SettingsView: View {
             }
             .background(Ink.ground)
             .navigationDestination(isPresented: $model.showWordList) { WordListPage(vocabulary: model.vocabulary) }
+            .navigationDestination(isPresented: $model.showQuickStart) { QuickStartPage() }
             .toolbar(sheet ? .visible : .hidden, for: .navigationBar)
             .navigationTitle(sheet ? Text("设置") : Text(""))
             .navigationBarTitleDisplayMode(.inline)
@@ -239,5 +264,72 @@ struct KeyPage: View {
         draft = ""
         editing = false
         Task { await ling.setKey(k) }
+    }
+}
+
+/// 设置 › 快速开始: where 开始听 can be put. iOS lets only the user choose them, in the system's own
+/// settings; this page says where.
+struct QuickStartPage: View {
+    /// What Siri and the Action button list the app as.
+    private let name = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? appDisplayName
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("不用先打开 app 就开始听，再按一次结束").font(.subheadline).foregroundStyle(Ink.secondary)
+                    .padding(.horizontal, 16).padding(.top, 12)
+                SectionLabel(text: L("操作按钮"))
+                Card {
+                    HStack(spacing: 16) {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Ink.ink, lineWidth: 2)
+                            .frame(width: 56, height: 86)
+                            .overlay(alignment: .topLeading) {
+                                Capsule().fill(Ink.accent).frame(width: 4, height: 16).offset(x: -6, y: 16)
+                            }
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("按一下开始听").font(.headline).foregroundStyle(Ink.ink)
+                            Text(L("iPhone 设置 › 操作按钮 › 快捷指令 › \(name)“开始听”")).font(.footnote).foregroundStyle(Ink.secondary)
+                            Button("打开 iPhone 设置") {
+                                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                            }
+                            .font(.subheadline.weight(.semibold)).tint(Ink.accentText)
+                            .frame(minHeight: 32)
+                        }
+                    }
+                    .padding(16)
+                }
+                SectionLabel(text: L("控制中心和锁屏"))
+                Card {
+                    HStack(spacing: 16) {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color(hex: 0x2A2D35))
+                            .frame(width: 60, height: 60)
+                            .overlay { Image(systemName: "mic.fill").foregroundStyle(.white).frame(width: 34, height: 34).background(Ink.accent, in: Circle()) }
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("“开始听”按钮").font(.headline).foregroundStyle(Ink.ink)
+                            Text("下拉控制中心，点左上角的 + 添加").font(.footnote).foregroundStyle(Ink.secondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(16)
+                }
+                SectionLabel(text: "Siri")
+                Card {
+                    Text(L("“嘿 Siri，用\(name)开始听”")).padding(.horizontal, 16).frame(minHeight: 50)
+                    Hairline()
+                    Text(L("“嘿 Siri，\(name)结束”")).padding(.horizontal, 16).frame(minHeight: 50)
+                }
+                Text("都按上次的语言听").font(.footnote).foregroundStyle(Ink.tertiary)
+                    .padding(.horizontal, 16).padding(.top, 10)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 40)
+            .frame(maxWidth: 640)
+            .frame(maxWidth: .infinity)
+        }
+        .background(Ink.ground)
+        .navigationTitle(Text("快速开始"))
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -79,7 +79,7 @@ struct ListenBar: View {
 
     private var idle: some View {
         Group {
-            Text("开始听").font(.headline).foregroundStyle(Ink.ink).padding(.leading, 18)
+            Text("开始听").font(.headline).foregroundStyle(Ink.ink).lineLimit(1).fixedSize().padding(.leading, 18)
             Rectangle().fill(Ink.line).frame(width: 1, height: 20)
             Menu {
                 Section {

@@ -29,8 +29,11 @@ final class RoomListen: ObservableObject {
     /// 手机外放: a video app plays aloud while we listen from the background, so its audio keeps
     /// playing beside ours and the subtitles go to the picture-in-picture window (PiPSubtitles).
     @Published private(set) var speakerMode = false
-    /// A call, Siri or another app took the audio: the microphone is off until it ends.
+    /// A call, Siri or another app took the audio, or 暂停 on the lock screen: the microphone is
+    /// off until it ends.
     @Published private(set) var paused = false
+    /// The pause is the user's (暂停): an interruption ending doesn't end it.
+    private var userPaused = false
 
     /// Every finished line, for the Live Activity.
     var onLine: ((Line) -> Void)?
@@ -82,6 +85,7 @@ final class RoomListen: ObservableObject {
         guard !isRunning else { return }
         speakerMode = speaker
         paused = false
+        userPaused = false
         lang = sourceLanguages.first { $0.locale == source } ?? sourceLanguages[0]
         self.target = target
         status = L("正在准备…")
@@ -176,7 +180,7 @@ final class RoomListen: ObservableObject {
             debugLog("room: interrupted")
             return
         }
-        guard paused else { return }
+        guard paused, !userPaused else { return }
         do {
             try audio.resume()
             paused = false
@@ -193,6 +197,32 @@ final class RoomListen: ObservableObject {
     }
 
     private var resumeWhenActive = false
+
+    /// 暂停 / 继续 (the Live Activity's button): the microphone off and on, the meeting going on.
+    func setPaused(_ on: Bool) {
+        guard isRunning, sessionID != nil, on != userPaused else { return }
+        userPaused = on
+        if on {
+            paused = true
+            level = 0
+            draft = ""
+            draftTranslation = ""
+            status = L("已暂停")
+            if !Self.silent { audio.pause() }
+            debugLog("room: paused by the user")
+        } else {
+            do {
+                if !Self.silent { try audio.resume() }
+                paused = false
+                status = ""
+                debugLog("room: resumed by the user")
+            } catch {
+                debugLog("room: resume failed: \(error)")
+                userPaused = true
+            }
+        }
+        onStateChange?()
+    }
 
     /// The app is in front again: a pause whose end came too early to take the microphone back.
     func appBecameActive() {
@@ -224,6 +254,7 @@ final class RoomListen: ObservableObject {
         guard isRunning else { return }
         isRunning = false
         paused = false
+        userPaused = false
         resumeWhenActive = false
         if !Self.silent { audio.stop() }
         let stream = self.stream, reader = self.reader
@@ -390,6 +421,12 @@ final class RoomAudio: @unchecked Sendable {
         }
         engine.prepare()
         try engine.start()
+    }
+
+    /// 暂停: nothing is heard or recorded until `resume`.
+    func pause() {
+        held = true
+        engine.pause()
     }
 
     /// The microphone again after an interruption, in whatever format the route now has.

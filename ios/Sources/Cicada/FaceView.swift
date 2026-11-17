@@ -212,7 +212,7 @@ struct FaceButton: View {
         Button { model.openFace() } label: {
             VStack(spacing: 1) {
                 Image(systemName: "bubble.left.and.text.bubble.right").font(.system(size: 19, weight: .medium))
-                Text("面对面").font(.system(size: 10, weight: .semibold))
+                Text("面对面").font(.system(size: 10, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7).padding(.horizontal, 4)
             }
             .foregroundStyle(Ink.ink)
             .frame(width: 58, height: 58)

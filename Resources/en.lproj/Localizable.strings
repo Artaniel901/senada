@@ -1599,3 +1599,24 @@
 "按住下面的按钮说话" = "Hold the button below and speak";
 "松开就念给对方" = "Let go to read it out";
 "对方在说话" = "They're speaking";
+
+/* iOS: quick start, Live Activity buttons, settings */
+"用麦克风听会议室，出实时双语字幕和纪要" = "Listen to the room with the microphone for live bilingual subtitles and notes";
+"结束并出纪要" = "End and Make Notes";
+"结束正在听的会议，有 key 时整理纪要" = "Ends the meeting being listened to and writes its notes when there is a key";
+"暂停或继续听" = "Pause or Resume Listening";
+"快速开始" = "Quick Start";
+"念给对方的声音" = "Voice for the Other Person";
+"手机自带" = "Built-in";
+"操作按钮、控制中心和 Siri" = "Action Button, Control Center and Siri";
+"不用先打开 app 就开始听，再按一次结束" = "Start listening without opening the app; press again to end";
+"都按上次的语言听" = "Each uses the last languages you listened in";
+"操作按钮" = "Action Button";
+"控制中心和锁屏" = "Control Center and Lock Screen";
+"按一下开始听" = "Press Once to Listen";
+"iPhone 设置 › 操作按钮 › 快捷指令 › %@“开始听”" = "iPhone Settings › Action Button › Shortcut › %@ “Start Listening”";
+"打开 iPhone 设置" = "Open iPhone Settings";
+"“开始听”按钮" = "“Start Listening” Button";
+"下拉控制中心，点左上角的 + 添加" = "Pull down Control Center and tap + at the top left to add it";
+"“嘿 Siri，用%@开始听”" = "“Hey Siri, start listening with %@”";
+"“嘿 Siri，%@结束”" = "“Hey Siri, stop %@”";

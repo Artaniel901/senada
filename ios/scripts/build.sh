@@ -15,12 +15,34 @@ files=()
 while IFS= read -r line; do [[ -z $line || $line == \#* ]] || files+=("$line"); done < ios/shared-sources.txt
 while IFS= read -r f; do files+=("$f"); done < <(find ios/Sources -name '*.swift' | sort)
 
+SDKPATH=$(xcrun --show-sdk-path --sdk "$SDK")
+# App Intents (Intents.swift) need the metadata Xcode extracts from the compiler's constant values:
+# without Metadata.appintents in the bundle, Siri, Shortcuts, Control Center and the Live
+# Activity's buttons don't know the intents. Each module is compiled whole (-wmo) to one
+# .swiftconstvalues file, then appintentsmetadataprocessor writes the metadata into its bundle.
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+printf '%s' '["AppIntent","AppEntity","TransientAppEntity","AppEnum","EntityQuery","AppShortcutsProvider","AppShortcutProviding","DynamicOptionsProvider","LiveActivityIntent","ControlConfigurationIntent","WidgetConfigurationIntent","_IntentValueRepresentable","AppIntentsPackage"]' > "$WORK/protocols.json"
+CONST=(-wmo -Xfrontend -const-gather-protocols-file -Xfrontend "$WORK/protocols.json")
+intents_metadata() {   # <module> <bundle dir> <binary> <sources...>
+  local module=$1 out=$2 binary=$3; shift 3
+  printf '%s\n' "$@" > "$WORK/$module.sources"
+  printf '%s\n' "$WORK/$module.swiftconstvalues" > "$WORK/$module.constvals"
+  xcrun appintentsmetadataprocessor --toolchain-dir "$(dirname "$(dirname "$(dirname "$(xcrun -f swiftc)")")")" \
+    --module-name "$module" --sdk-root "$SDKPATH" --xcode-version "$(xcodebuild -version | awk '/Build version/{print $3}')" \
+    --platform-family iOS --deployment-target 26.0 --target-triple "$TARGET" --output "$out" \
+    --source-file-list "$WORK/$module.sources" --swift-const-vals-list "$WORK/$module.constvals" \
+    --binary-file "$binary" --deployment-aware-processing --no-app-shortcuts-localization --force --quiet-warnings >/dev/null 2>&1
+  [[ -d "$out/Metadata.appintents" ]] || { echo "no App Intents metadata for $module"; exit 1; }
+}
+
 # STRINGS_OUT=<dir>: also write the UI text keys there (scripts/strings.py).
 extra=()
 [[ -n "${STRINGS_OUT:-}" ]] && extra=(-emit-localized-strings -emit-localized-strings-path "$STRINGS_OUT")
 xcrun --sdk "$SDK" swiftc -O -swift-version 5 -parse-as-library -module-name Cicada \
-  -target "$TARGET" -sdk "$(xcrun --show-sdk-path --sdk "$SDK")" -D CICADA_IOS \
+  -target "$TARGET" -sdk "$SDKPATH" -D CICADA_IOS "${CONST[@]}" -emit-const-values-path "$WORK/Cicada.swiftconstvalues" \
   "${extra[@]+"${extra[@]}"}" "${files[@]}" -o "$APP/Cicada"
+intents_metadata Cicada "$APP" "$APP/Cicada" "${files[@]}"
 
 cp ios/Resources/Info.plist "$APP/Info.plist"
 # UI text is the Mac's: the Chinese source is the key, the other languages translate it.
@@ -47,10 +69,12 @@ rm -rf "$ICONS"
 # queue (the plain Swift entry point dies in libdispatch before the bundle loads).
 APPEX="$APP/PlugIns/CicadaLive.appex"
 mkdir -p "$APPEX"
+LIVE=(ios/LiveActivity/*.swift ios/Sources/Cicada/ListenActivity.swift ios/Sources/Cicada/Intents.swift)
 xcrun --sdk "$SDK" swiftc -O -swift-version 5 -parse-as-library -application-extension -module-name CicadaLive \
-  -target "$TARGET" -sdk "$(xcrun --show-sdk-path --sdk "$SDK")" \
+  -target "$TARGET" -sdk "$SDKPATH" -D CICADA_LIVE "${CONST[@]}" -emit-const-values-path "$WORK/CicadaLive.swiftconstvalues" \
   -Xlinker -e -Xlinker _NSExtensionMain \
-  ios/LiveActivity/*.swift ios/Sources/Cicada/ListenActivity.swift -o "$APPEX/CicadaLive"
+  "${LIVE[@]}" -o "$APPEX/CicadaLive"
+intents_metadata CicadaLive "$APPEX" "$APPEX/CicadaLive" "${LIVE[@]}"
 cp ios/LiveActivity/Info.plist "$APPEX/Info.plist"
 cp "$APP/logo.png" "$APPEX/"
 for d in "$APP"/*.lproj; do cp -R "$d" "$APPEX/"; done
