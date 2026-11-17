@@ -53,7 +53,7 @@ struct RecordView: View {
                         .font(.footnote).foregroundStyle(Ink.secondary).padding(.top, 6)
                 }
                 PillSwitch(selection: $model.recordPage,
-                           options: [(.transcript, "文字记录"), (.notes, "纪要")])
+                           options: [(.notes, "纪要"), (.transcript, "文字记录")])
                     .padding(.top, 16)
 
                 switch model.recordPage {

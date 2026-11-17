@@ -148,9 +148,9 @@ final class AppModel: ObservableObject {
     /// The record page's picked speaker (scheme A: only they are drawn in ink).
     @Published var focusSpeaker: Int?
     @Published var tab: AppTab = .records
-    @Published var selection: String?
+    @Published var selection: String? { didSet { if selection != oldValue { recordPage = firstPage(selection) } } }
     /// A meeting opened from 搜索 (iPhone).
-    @Published var searchPath: [String] = []
+    @Published var searchPath: [String] = [] { didSet { if searchPath.last != oldValue.last { recordPage = firstPage(searchPath.last) } } }
     /// The record page's 文字记录 / 纪要 switch, kept here so a debug command can flip it.
     @Published var recordPage: RecordPage = .transcript
     @Published var query = ""
@@ -206,6 +206,8 @@ final class AppModel: ObservableObject {
         selection = nil
         searchPath = []
         tab = .records
+        // 纪要 first, as the Mac's notes window; without a key there are none, so 字幕.
+        livePage = ling.hasKey ? .notes : .subtitles
         fixes.meetingStarted()
         room.start(source: Pref.sourceLang.locale, target: Pref.target(for: Pref.sourceLang.code), voices: UserDefaults.standard.bool(forKey: Pref.voices),
                    speaker: Pref.speakerMode)
@@ -255,6 +257,11 @@ final class AppModel: ObservableObject {
         } else if !room.isRunning {
             liveActivity.end()
         }
+    }
+
+    /// 纪要 first, as on the Mac; a meeting without notes opens on its 文字记录.
+    private func firstPage(_ id: String?) -> RecordPage {
+        store.session(id)?.notes == nil ? .transcript : .notes
     }
 
     /// Full notes for a stored meeting, as the Mac's 生成纪要.

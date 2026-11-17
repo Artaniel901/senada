@@ -172,23 +172,24 @@ struct LivePhone: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var room: RoomListen
     @EnvironmentObject var notes: NotesEngine
-    @State private var page: LivePage = .subtitles
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
                 HomeTitle()
                 ListenBar()
-                PillSwitch(selection: $page, options: [(.subtitles, "字幕"), (.notes, notesTitle)])
+                PillSwitch(selection: $model.livePage, options: [(.notes, notesTitle), (.subtitles, "字幕")])
+                EndingStrip()
                 TranslateDownCard()
                 if let id = room.sessionID { FixAskCard(fixes: model.fixes, session: id) }
             }
             .padding(.horizontal, 16)
             .padding(.top, 6)
-            switch page {
+            switch model.livePage {
             case .subtitles: LiveLines().padding(.top, 12)
             case .notes:
                 ScrollView { NotesPage(notes: notes.notes).padding(20) }
+                    .safeAreaInset(edge: .bottom) { SayingNow().padding(.horizontal, 16).padding(.bottom, 8) }
             }
         }
         .background(alignment: .topLeading) { PiPHost(pip: model.pip).frame(width: 4, height: 4) }
@@ -196,7 +197,7 @@ struct LivePhone: View {
         .overlay(alignment: .bottom) { FixToast(fixes: model.fixes).padding(.horizontal, 16).padding(.bottom, 8) }
         .animation(.snappy(duration: 0.2), value: model.fixes.toast)
         .animation(.snappy(duration: 0.2), value: model.translationDown)
-        .onChange(of: model.livePage) { page = model.livePage }
+        .animation(.snappy(duration: 0.2), value: model.ending)
     }
 
     private var notesTitle: LocalizedStringKey {
@@ -205,6 +206,37 @@ struct LivePhone: View {
 }
 
 enum LivePage: String { case subtitles, notes }
+
+/// Under 纪要: what is being said now (else the newest line), so the notes page still shows the
+/// room live; a tap goes to 字幕.
+struct SayingNow: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var room: RoomListen
+
+    var body: some View {
+        let live = !room.draft.isEmpty
+        let last = room.lines.last
+        if live || last != nil {
+            Button { withAnimation(.snappy(duration: 0.2)) { model.livePage = .subtitles } } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(live ? L("正在说") : L("刚才")).font(.caption.weight(.semibold)).foregroundStyle(live ? Ink.accentText : Ink.secondary)
+                        Spacer()
+                        Text("点开看字幕").font(.caption).foregroundStyle(Ink.secondary)
+                    }
+                    Text(verbatim: live ? room.draft : last?.src ?? "").font(.footnote).foregroundStyle(Ink.secondary).lineLimit(1)
+                    let dst = live ? room.draftTranslation : last?.dst ?? ""
+                    if !dst.isEmpty { Text(verbatim: dst).font(.callout).foregroundStyle(Ink.ink).lineLimit(2) }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Ink.accent.opacity(live ? 0.35 : 0), lineWidth: 1.5) }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
 
 /// 连不上翻译: why the subtitles are only the original. Without a key, the key is the fix (Ling
 /// needs no proxy in mainland China), so the card opens 设置; with one, it comes back by itself.
@@ -293,7 +325,6 @@ struct LivePad: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var room: RoomListen
     @EnvironmentObject var notes: NotesEngine
-    @State private var page: LivePage = .subtitles
 
     var body: some View {
         VStack(spacing: 0) {
@@ -303,21 +334,22 @@ struct LivePad: View {
             }
         GeometryReader { g in
             if g.size.width >= 820 {
+                // 纪要 on the left and wider, 字幕 beside it, as the Mac's notes window reads.
                 HStack(alignment: .top, spacing: 22) {
-                    column("字幕") { LiveLines().padding(.horizontal, -16) }
                     column(notesTitle) {
                         ScrollView {
                             NotesPage(notes: notes.notes).padding(20)
                                 .background(Color.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                         }
                     }
-                    .frame(width: g.size.width * 0.42)
+                    column("字幕") { LiveLines().padding(.horizontal, -16) }
+                        .frame(width: g.size.width * 0.42)
                 }
                 .padding(.horizontal, 20).padding(.top, 18)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
-                    PillSwitch(selection: $page, options: [(.subtitles, "字幕"), (.notes, notesTitle)]).frame(maxWidth: 320)
-                    if page == .subtitles { LiveLines().padding(.horizontal, -16) } else {
+                    PillSwitch(selection: $model.livePage, options: [(.notes, notesTitle), (.subtitles, "字幕")]).frame(maxWidth: 320)
+                    if model.livePage == .subtitles { LiveLines().padding(.horizontal, -16) } else {
                         ScrollView { NotesPage(notes: notes.notes).padding(20).background(Color.white, in: RoundedRectangle(cornerRadius: 22)) }
                     }
                 }
@@ -330,7 +362,6 @@ struct LivePad: View {
         .overlay(alignment: .bottom) { FixToast(fixes: model.fixes).frame(maxWidth: 560).padding(.horizontal, 20).padding(.bottom, 12) }
         .animation(.snappy(duration: 0.2), value: model.fixes.toast)
         .animation(.snappy(duration: 0.2), value: model.fixes.asking(in: room.sessionID ?? "")?.fix)
-        .onChange(of: model.livePage) { page = model.livePage }
     }
 
     private var notesTitle: LocalizedStringKey {
