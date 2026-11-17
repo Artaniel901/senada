@@ -1,6 +1,21 @@
+#if os(macOS)
 import AppKit
+#endif
 import Foundation
 import UserNotifications
+
+/// Where 存到文件夹 is set: `AppSettings` on the Mac, the iOS app's own (its folder comes back from a
+/// security-scoped bookmark, since a sandboxed app can't reopen a path it was once given).
+@MainActor protocol FolderExportPrefs: AnyObject {
+    var exportOn: Bool { get set }
+    var exportFolder: String { get set }
+    /// The folder to write to; the Mac's is the path itself.
+    var exportFolderURL: URL? { get }
+}
+
+extension FolderExportPrefs {
+    var exportFolderURL: URL? { exportFolder.isEmpty ? nil : URL(fileURLWithPath: exportFolder, isDirectory: true) }
+}
 
 /// 存到文件夹: the file a settled meeting becomes (docs/folder-export.md). The name and frontmatter
 /// are a contract with the ports (Tests/fixtures/folder-export); the body is 导出 Markdown's.
@@ -118,11 +133,13 @@ enum FolderExportFormat {
             .map { URL(fileURLWithPath: $0.0, isDirectory: true) }
     }
 
+    #if os(macOS)
     static var obsidianVaults: [URL] {
         let file = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/obsidian/obsidian.json")
         return (try? Data(contentsOf: file)).map { obsidianVaults($0) } ?? []
     }
+    #endif
 }
 
 /// Writes settled meetings into the chosen folder and keeps the index of what it wrote. UI state on
@@ -153,7 +170,7 @@ enum FolderExportFormat {
     @Published private(set) var checking = false
 
     let store: SessionStore
-    let settings: AppSettings
+    let settings: any FolderExportPrefs
     /// The meeting's final notes pass is running or waiting.
     var settling: (String) -> Bool = { _ in false }
     private let indexURL: URL
@@ -162,7 +179,7 @@ enum FolderExportFormat {
     /// Told about this problem already (cleared once a write works).
     private var notified = false
 
-    init(store: SessionStore, settings: AppSettings, indexURL: URL? = nil) {
+    init(store: SessionStore, settings: any FolderExportPrefs, indexURL: URL? = nil) {
         self.store = store
         self.settings = settings
         self.indexURL = indexURL ?? store.root.deletingLastPathComponent().appendingPathComponent("FolderExport.json")
@@ -172,7 +189,7 @@ enum FolderExportFormat {
     }
 
     var on: Bool { settings.exportOn && !settings.exportFolder.isEmpty }
-    var folder: URL? { settings.exportFolder.isEmpty ? nil : URL(fileURLWithPath: settings.exportFolder, isDirectory: true) }
+    var folder: URL? { settings.exportFolder.isEmpty ? nil : settings.exportFolderURL }
 
     func file(for id: String) -> URL? {
         guard on, let folder, index.folder == settings.exportFolder, let name = index.files[id] else { return nil }
@@ -195,9 +212,11 @@ enum FolderExportFormat {
         return [url.deletingLastPathComponent().path, url.path].map { fm.displayName(atPath: $0) }.joined(separator: " › ")
     }
 
+    #if os(macOS)
     static func vault(of url: URL) -> URL? {
         FolderExportFormat.obsidianVaults.first { url.path == $0.path || url.path.hasPrefix($0.path + "/") }
     }
+    #endif
 
     // MARK: Triggers
 
@@ -336,6 +355,9 @@ enum FolderExportFormat {
 
     /// Off the main thread. Stops at the first problem: the rest would fail the same way.
     nonisolated static func write(_ jobs: [Job], to folder: URL, ours: [String: String]) -> [Outcome] {
+        // iOS: a folder picked in Files is reachable only inside this (the Mac's path: no-op).
+        let scoped = folder.startAccessingSecurityScopedResource()
+        defer { if scoped { folder.stopAccessingSecurityScopedResource() } }
         if let p = ensure(folder) { return [.stopped(p)] }
         let fm = FileManager.default
         var ours = ours
@@ -379,6 +401,8 @@ enum FolderExportFormat {
 
     /// Writes and removes a hidden file: the check after choosing a folder.
     nonisolated static func probe(_ folder: URL) -> Problem? {
+        let scoped = folder.startAccessingSecurityScopedResource()
+        defer { if scoped { folder.stopAccessingSecurityScopedResource() } }
         if let p = ensure(folder) { return p }
         let file = folder.appendingPathComponent(".cicada-check")
         do {
@@ -423,8 +447,10 @@ enum FolderExportFormat {
         }
     }
 
+    #if os(macOS)
     /// System Settings › 隐私与安全性 › 文件和文件夹.
     static func openPrivacySettings() {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders")!)
     }
+    #endif
 }
