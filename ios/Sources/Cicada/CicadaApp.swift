@@ -67,6 +67,15 @@ enum Pref {
         return RecordList.pair(s, short: true) ?? ""
     }
 
+    /// What a meeting in `source` is translated into, as the Mac's `AppSettings.resolvedTarget`:
+    /// 跟随系统 is my language, unless they speak it; then the next system language (English UI and
+    /// an English meeting would otherwise "translate" English into English).
+    static func target(for source: String) -> String {
+        let t = UserDefaults.standard.string(forKey: target) ?? "system"
+        return t == "system" ? followSystemTarget(source: source, systemLanguages: Locale.preferredLanguages) : t
+    }
+
+    /// The reader's own language (纪要's 我的语言).
     static var targetCode: String {
         let t = UserDefaults.standard.string(forKey: target) ?? "system"
         return t == "system" ? myLanguage(systemLanguages: Locale.preferredLanguages) : t
@@ -187,7 +196,7 @@ final class AppModel: ObservableObject {
         searchPath = []
         tab = .records
         fixes.meetingStarted()
-        room.start(source: Pref.sourceLang.locale, target: Pref.targetCode, voices: UserDefaults.standard.bool(forKey: Pref.voices),
+        room.start(source: Pref.sourceLang.locale, target: Pref.target(for: Pref.sourceLang.code), voices: UserDefaults.standard.bool(forKey: Pref.voices),
                    speaker: Pref.speakerMode)
     }
 

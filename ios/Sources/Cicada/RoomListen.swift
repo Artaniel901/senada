@@ -327,6 +327,16 @@ final class RoomListen: ObservableObject {
         handle(Recognition.Piece(text: text, isFinal: true, start: at, end: at + 2, confidence: nil))
     }
 
+    /// Debug (`heardT:<text>|<translation>`): as `debugHeard`, with the translation given, for
+    /// screenshots when no translation service answers.
+    func debugHeard(_ text: String, translation: String) {
+        debugHeard(text)
+        guard let i = lines.lastIndex(where: { $0.src == text }) else { return }
+        lines[i].dst = translation
+        store.setTranslation(lineID: lines[i].id, translation)
+        onLine?(lines[i])
+    }
+
     /// `retry`: every provider failed before (Ling busy while Google answers 429): asked again a
     /// little later, twice at most, as the Mac does.
     private func translate(_ id: String, _ text: String, retry: Int = 0) {

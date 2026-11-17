@@ -99,7 +99,7 @@ struct ListenBar: View {
                     ForEach(targetLanguages, id: \.code) { Text($0.name).tag($0.code) }
                 } label: { Text("翻译成") }
             } label: {
-                Text(verbatim: (hear == "speaker" ? L("外放") + " · " : "") + "\(Pref.sourceName) → \(targetName(Pref.targetCode))")
+                Text(verbatim: (hear == "speaker" ? L("外放") + " · " : "") + "\(Pref.sourceName) → \(targetName(Pref.target(for: Pref.sourceLang.code)))")
                     .font(.subheadline).foregroundStyle(Ink.secondary).lineLimit(1).minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(minHeight: 44)

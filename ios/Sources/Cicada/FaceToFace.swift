@@ -236,6 +236,7 @@ final class FaceToFace: ObservableObject {
         let from = lang(side), to = lang(side == .me ? .them : .me)
         let t = Turn(side: side, said: said, translation: translation)
         last = t
+        problem = ""
         record(t, from: from, to: to)
         phase = .speaking(side)
         turnTask = Task {

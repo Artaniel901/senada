@@ -211,7 +211,7 @@ private struct WelcomeSample: View {
                         } else {
                             Text(sample.played ? L("放完了") : L("约 \(Int(SampleRun.duration.rounded())) 秒")).font(.footnote).foregroundStyle(Ink.secondary)
                         }
-                        Text(verbatim: L("示例会议") + " · " + Pref.pairText("en", Pref.targetCode)).font(.headline).foregroundStyle(Ink.ink)
+                        Text(verbatim: L("示例会议") + " · " + Pref.pairText("en", Pref.target(for: "en"))).font(.headline).foregroundStyle(Ink.ink)
                     }
                     Spacer(minLength: 8)
                     Button { sample.playing ? model.stopSample() : model.playSample() } label: {
@@ -432,7 +432,7 @@ extension AppModel {
         guard !sample.playing else { return }
         if !room.isRunning {
             fixes.meetingStarted()
-            room.start(source: "en-US", target: Pref.targetCode, voices: UserDefaults.standard.bool(forKey: Pref.voices))
+            room.start(source: "en-US", target: Pref.target(for: "en"), voices: UserDefaults.standard.bool(forKey: Pref.voices))
         }
         sample.onFinished = { [weak self] in
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self?.stopListening() }

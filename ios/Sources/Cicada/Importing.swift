@@ -15,10 +15,7 @@ import UniformTypeIdentifiers
 final class ImportPrefs: ImportSettings {
     var importLanguage: String { Pref.sourceLang.locale }
     var speakerVoices: Bool { UserDefaults.standard.bool(forKey: Pref.voices) }
-    func resolvedTarget(source: String?) -> String {
-        UserDefaults.standard.string(forKey: Pref.target).flatMap { $0 == "system" ? nil : $0 }
-            ?? followSystemTarget(source: source, systemLanguages: Locale.preferredLanguages)
-    }
+    func resolvedTarget(source: String?) -> String { Pref.target(for: source ?? Pref.sourceLang.code) }
 }
 
 enum ImportFiles {
