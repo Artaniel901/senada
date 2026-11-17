@@ -141,7 +141,7 @@ Mac 버전은 필요한 기능을 쓸 때만 권한을 요청하며, 거부해�
 
 macOS 14.4 이상(Apple silicon 및 Intel 지원)이 필요합니다. Apple silicon의 경우 macOS 14.4–15에서는 먼저 시스템 설정 › 키보드에서 "받아쓰기"를 켜고 들을 언어를 추가해야 하며, macOS 26에서는 새 기기 내 모델을 바로 쓰므로 받아쓰기를 켤 필요가 없습니다. Intel 버전은 클라우드 Ming으로 인식하므로 Ling 키를 설정해야 합니다.
 
-`Cicada-<버전>-macOS-AppleSilicon.dmg` 또는 `Cicada-<버전>-macOS-Intel.dmg`를 내려받아 응용 프로그램 폴더로 끌어다 놓으세요(`shasum -a 256 Cicada-*.dmg`로 검증 가능). 아직 Apple 공증을 받지 않아 처음 열 때 차단되면 시스템 설정 › 개인정보 보호 및 보안에서 확인 없이 열기를 누르세요. 초기 안내에 따라 권한을 켜고 샘플 회의를 들어보면 됩니다.
+`Cicada-<버전>-macOS-AppleSilicon.dmg` 또는 `Cicada-<버전>-macOS-Intel.dmg`를 내려받아 응용 프로그램 폴더로 끌어다 놓으세요(`shasum -a 256 Cicada-*.dmg`로 검증 가능). Apple 서명과 공증을 받아 더블클릭하면 바로 열립니다. 초기 안내에 따라 권한을 켜고 샘플 회의를 들어보면 됩니다.
 
 <p align="center">
   <img src="docs/onboarding.png" width="640" alt="2인 샘플 회의를 재생하며 실시간 이중 언어 자막을 보여주는 초기 안내 2단계">
@@ -164,7 +164,7 @@ Android 10 이상이 필요합니다. `Cicada-<버전>-Android.apk`를 내려받
 우선순위 순이며, 원하는 항목이 있다면 Issue로 남겨 주세요. 자세한 내용은 [docs/ROADMAP.md](docs/ROADMAP.md)를 참고하세요.
 
 - **내 발언 기록**: 회의 중 반향을 제거하며 마이크를 계속 들어, 내가 직접 입을 열어 말한 내용도 기록과 회의록에 포함.
-- **정식 서명 및 공증**: Mac과 Windows 설치 파일에 정식 서명과 공증을 추가해 차단 팝업을 없애고 AI 키를 시스템 키체인에 보관.
+- **Windows 정식 서명**: Windows 설치 파일에 정식 서명을 추가해 차단 팝업을 없애고(Mac 버전은 공증 완료) AI 키를 시스템 키체인에 보관.
 - **다른 플랫폼의 성문 인식**: Mac은 이미 자주 회의하는 동료의 목소리를 기억해 다음 회의에서 자동으로 인식합니다. Windows, Linux, Android도 이어서 지원.
 - **키 없이 쓰는 회의록**: 지원되는 Mac에서 Apple 기기 내 모델로 회의록 정리.
 - **Android 앱 스토어 출시**: APK를 수동으로 설치할 필요 없음.

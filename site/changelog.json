@@ -1,5 +1,22 @@
 [
   {
+    "version": "1.11.0",
+    "date": null,
+    "title": "Mac 版通过 Apple 公证",
+    "summary": "Mac 版有了正式签名并通过 Apple 公证，下载后双击就能打开，不用再去系统设置里点仍要打开。",
+    "image": null,
+    "items": [
+      {
+        "kind": "improved",
+        "platforms": [
+          "mac"
+        ],
+        "title": "Mac 版有了正式签名并通过 Apple 公证，第一次打开不会再被系统拦下。",
+        "text": "以前第一次打开要去 系统设置 › 隐私与安全性 里点“仍要打开”，现在双击就能打开。已经装好的知了照常自动更新，之前开过的权限都还在，不用重新授权。"
+      }
+    ]
+  },
+  {
     "version": "1.10.1",
     "date": "2026-11-14",
     "title": "Windows 听电脑声音更稳了",

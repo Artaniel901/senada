@@ -141,7 +141,7 @@ Mac 版用到什么功能才要什么权限，拒了也不耽误别的功能：
 
 需要 macOS 14.4+（支持 Apple 芯片与 Intel）。Apple 芯片在 macOS 14.4–15 上要先去系统设置 › 键盘里打开“听写”并添加要听的语言；macOS 26 直接用新本机模型，不用开听写；Intel 版走云端 Ming 识别，需要配 Ling key。
 
-下载 `Cicada-<版本>-macOS-AppleSilicon.dmg` 或 `Cicada-<版本>-macOS-Intel.dmg`，拖进应用程序文件夹（可用 `shasum -a 256 Cicada-*.dmg` 校验）。目前还没有苹果公证，第一次打开被拦时，去系统设置 › 隐私与安全性里点仍要打开。跟着首次引导开权限、试听示例会议即可。
+下载 `Cicada-<版本>-macOS-AppleSilicon.dmg` 或 `Cicada-<版本>-macOS-Intel.dmg`，拖进应用程序文件夹（可用 `shasum -a 256 Cicada-*.dmg` 校验）。已通过苹果签名与公证，双击就能打开。跟着首次引导开权限、试听示例会议即可。
 
 <p align="center">
   <img src="docs/onboarding.png" width="640" alt="首次引导第二步，播放双人示例会议并实时显示双语字幕">
@@ -164,7 +164,7 @@ Mac 版用到什么功能才要什么权限，拒了也不耽误别的功能：
 按先后排，想要哪一项欢迎提 Issue。细节见 [docs/ROADMAP.zh-CN.md](docs/ROADMAP.zh-CN.md)。
 
 - **记录我的发言**：开会时持续听麦克风并消除回声，把你直接开口说的话也记进记录和纪要。
-- **正式签名与公证**：Mac 和 Windows 安装包加上正式签名与公证，不再弹窗拦截，AI key 放回系统钥匙串。
+- **Windows 正式签名**：Windows 安装包加上正式签名，不再弹窗拦截（Mac 版已通过公证），AI key 放回系统钥匙串。
 - **其他平台的声纹识别**：Mac 已能记住常开会同事的声音、下次自动认出，Windows、Linux 和 Android 随后跟上。
 - **不用 key 也有纪要**：在支持的 Mac 上用 Apple 本机模型整理纪要。
 - **Android 上架应用商店**：不用再手动装 APK。

@@ -141,7 +141,7 @@ Installers are on the [Releases page](https://github.com/wquguru/cicada/releases
 
 Requires macOS 14.4+ (Apple silicon and Intel). On Apple silicon with macOS 14.4–15, first go to **System Settings › Keyboard** to turn on **Dictation** and add the languages you want heard; macOS 26 uses the new on-device model directly without needing Dictation; Intel Macs use cloud-based Ming recognition and require a Ling key.
 
-Download `Cicada-<version>-macOS-AppleSilicon.dmg` or `Cicada-<version>-macOS-Intel.dmg` and drag Cicada into Applications (verify with `shasum -a 256 Cicada-*.dmg`). The app is not notarized by Apple yet, so if the first launch is blocked, go to **System Settings › Privacy & Security** and click **Open Anyway**. Follow the onboarding guide to grant permissions and try the sample meeting.
+Download `Cicada-<version>-macOS-AppleSilicon.dmg` or `Cicada-<version>-macOS-Intel.dmg` and drag Cicada into Applications (verify with `shasum -a 256 Cicada-*.dmg`). The app is signed and notarized by Apple, so it opens with a double-click. Follow the onboarding guide to grant permissions and try the sample meeting.
 
 <p align="center">
   <img src="docs/onboarding.png" width="640" alt="Onboarding step 2 playing a two-person sample meeting with live bilingual subtitles">
@@ -164,7 +164,7 @@ Requires Android 10+. Download and install `Cicada-<version>-Android.apk`; on An
 In rough order of priority; feel free to open an Issue for what you'd like to see. See [docs/ROADMAP.md](docs/ROADMAP.md) for details.
 
 - **Record my own speech**: Continuously listen to the microphone with echo cancellation during meetings so what you say directly is also included in records and notes.
-- **Code signing and notarization**: Official signing and notarization for Mac and Windows installers to eliminate security prompts and move AI keys back to the system keychain.
+- **Windows code signing**: Official signing for the Windows installer to eliminate the security prompt (the Mac app is already notarized), and AI keys back in the system keychain.
 - **Speaker recognition on the other platforms**: The Mac already remembers frequent coworkers' voices and recognizes them in later meetings; Windows, Linux and Android come next.
 - **Notes without a key**: Generate meeting notes on supported Macs using Apple's on-device models.
 - **Android on app stores**: No more manual APK installs.

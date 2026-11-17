@@ -153,12 +153,9 @@
   "start_mob_p": "The iPhone app is on its way. Send the download link to your computer; you can sign up for an AI service key on your phone right now.",
   "s1_h": "Download and install",
   "s1_p": "Open the DMG and drag Cicada into Applications.",
-  "gate_h": "Mac says it can’t verify Cicada?",
-  "gate_p": "Cicada isn’t notarized by Apple yet, so allow it once the first time:",
-  "gate_1": "System Settings",
-  "gate_2": "Privacy & Security",
-  "gate_3": "Open Anyway",
-  "trust_h": "Why it’s safe to allow",
+  "gate_h": "Notarized by Apple",
+  "gate_p": "Double-click to open; nothing to allow in System Settings.",
+  "trust_h": "Why you can trust it",
   "trust_1": "All the code is open source under Apache-2.0 and readable on <a href=\"{{REPO}}\">GitHub</a>.",
   "trust_2": "Every release comes with a SHA-256 checksum, so <a href=\"{{REPO}}/blob/main/README.md#requirements--installation\">one command</a> confirms the download is the original.",
   "trust_3": "Questions? Ask the author, {{X_LINK}}, on X.",
@@ -245,8 +242,8 @@
       "What you say out loud in the meeting goes into the notes too"
     ],
     [
-      "Proper signing and notarization",
-      "No more “Open Anyway” on first launch"
+      "Proper Windows signing",
+      "No more “Run anyway” on first launch"
     ],
     [
       "Voice recognition",
@@ -308,8 +305,8 @@
       "For now, only what you say while holding the talk key. “Record what I say” is first on the roadmap."
     ],
     [
-      "Blocked on first launch?",
-      "Cicada isn’t notarized by Apple or code-signed for Windows yet. On a Mac, go to System Settings › Privacy & Security and click “Open Anyway”; on Windows, click “More info › Run anyway”. Only once. Proper signing is on the roadmap."
+      "Blocked on first launch on Windows?",
+      "Cicada isn’t code-signed for Windows yet. Click “More info › Run anyway” once and it won’t ask again; proper signing is on the roadmap. The Mac app is notarized by Apple and opens with a double-click."
     ],
     [
       "What else does interpreting need?",
