@@ -328,6 +328,7 @@ struct LivePad: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            EndingStrip().frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
             TranslateDownCard().frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
             if let id = room.sessionID {
                 FixAskCard(fixes: model.fixes, session: id).frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)

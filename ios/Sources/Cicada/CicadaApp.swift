@@ -46,6 +46,11 @@ enum Pref {
     static let myLang = "iosMyLang"
     /// 第一次打开's three steps are done (or skipped).
     static let welcomed = "iosWelcomed"
+    /// 保存会议录音, the Mac's and Android's recordAudio.
+    static let recordAudio = "recordAudio"
+    /// 没人说话时: "prompt" (count down, then end), "end" or "off"; 多久算没人说话 in minutes. The Mac's names.
+    static let silenceEnd = "silenceEnd"
+    static let silenceMinutes = "silenceMinutes"
     static var speakerMode: Bool { UserDefaults.standard.string(forKey: hear) == "speaker" }
 
     /// 对方说 on iOS: one language the user picks (detecting it comes later); the Mac's "auto" reads as English.
@@ -145,6 +150,13 @@ final class AppModel: ObservableObject {
     /// 词表 and 改正听错的词, the Mac's own engines.
     let vocabulary = Vocabulary(url: Vocabulary.defaultURL)
     lazy var fixes = makeFixes()
+    /// 结束会议 by itself (AutoEnd.swift): the countdown on screen, and the watch behind it.
+    @Published var ending: MeetingEndWatch.Pending?
+    var endWatch: MeetingEndWatch?
+    var endTimer: Timer?
+    var endHeard = (lines: 0, draft: "")
+    /// Debug (`endTimes:<silence>,<countdown>`): seconds instead of minutes, to test it.
+    var endTimesOverride: (Double, Double)?
     /// 正在听's 字幕 / 纪要 switch, so a debug command can flip it.
     @Published var livePage: LivePage = .subtitles
     /// The record page's picked speaker (scheme A: only they are drawn in ink).
@@ -181,7 +193,8 @@ final class AppModel: ObservableObject {
 
     init() {
         UserDefaults.standard.register(defaults: [Pref.source: "en-US", Pref.voices: true, Pref.model: LingClient.models[0], Pref.notesLanguage: "mine",
-                                                  Pref.fixMisheard: true, Pref.askNames: true])
+                                                  Pref.fixMisheard: true, Pref.askNames: true, Pref.recordAudio: true,
+                                                  Pref.silenceEnd: "prompt", Pref.silenceMinutes: 10.0])
         TranscriptExport.voices = UserDefaults.standard.bool(forKey: Pref.voices)
         // Ling only for now: the Mac's other services (AIProvider) come to iOS with their settings.
         ling.config = {
@@ -256,8 +269,10 @@ final class AppModel: ObservableObject {
         pip.setEnabled(room.isRunning && room.speakerMode)
         if room.isRunning, let start = room.startedAt {
             liveActivity.start(startedAt: start, pair: Pref.pairText(room.languagePair.source, room.languagePair.target))
+            watchEnd()
         } else if !room.isRunning {
             liveActivity.end()
+            stopWatchingEnd()
         }
     }
 

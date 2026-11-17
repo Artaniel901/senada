@@ -11,6 +11,9 @@ struct SettingsView: View {
     @AppStorage(Pref.model) private var aiModel = LingClient.models[0]
     @AppStorage(Pref.target) private var target = "system"
     @AppStorage(Pref.voices) private var voices = true
+    @AppStorage(Pref.recordAudio) private var recordAudio = true
+    @AppStorage(Pref.silenceEnd) private var silenceEnd = "prompt"
+    @AppStorage(Pref.silenceMinutes) private var silenceMinutes = 10.0
     @AppStorage(Pref.notesLanguage) private var notesLanguage = "mine"
 
     var body: some View {
@@ -65,16 +68,52 @@ struct SettingsView: View {
                                 .labelsHidden()
                                 .tint(Ink.ok)
                         }
+                        Hairline()
+                        helped(row(Text("保存会议录音")) {
+                            Toggle(isOn: $recordAudio) { Text("保存会议录音") }
+                                .labelsHidden()
+                                .tint(Ink.ok)
+                        }, L("只存在这台手机上，会议记录里能回放原声"))
+                    }
+                    // As on the Mac and Android, minus 会议应用挂断后结束: iOS can't see another app's microphone.
+                    SectionLabel(text: L("结束会议"))
+                    Card {
+                        helped(row(Text("没人说话时")) {
+                            Picker(selection: $silenceEnd) {
+                                Text("提醒后结束").tag("prompt")
+                                Text("直接结束").tag("end")
+                                Text("一直记录").tag("off")
+                            } label: { Text("没人说话时") }
+                            .pickerStyle(.menu)
+                            .tint(Ink.secondary)
+                        }, L("按识别出的话算，背景音乐不算"))
+                        if silenceEnd != "off" {
+                            Hairline()
+                            row(Text("多久算没人说话")) {
+                                Picker(selection: $silenceMinutes) {
+                                    ForEach([5.0, 10, 15, 30], id: \.self) { Text(L("\(Int($0)) 分钟")).tag($0) }
+                                } label: { Text("多久算没人说话") }
+                                .pickerStyle(.menu)
+                                .tint(Ink.secondary)
+                            }
+                        }
                     }
                     SectionLabel(text: L("纪要"))
                     Card {
                         row(Text("纪要语言")) {
-                            Picker(selection: $notesLanguage) {
-                                Text(L("我的语言 · \(targetName(Pref.targetCode))")).tag("mine")
-                                Text("会议原文").tag("source")
-                            } label: { Text("纪要语言") }
-                            .pickerStyle(.menu)
-                            .tint(Ink.secondary)
+                            // The menu names the language; the row only the choice, so it fits on one line in English.
+                            Menu {
+                                Picker(selection: $notesLanguage) {
+                                    Text(L("我的语言 · \(targetName(Pref.targetCode))")).tag("mine")
+                                    Text("会议原文").tag("source")
+                                } label: { Text("纪要语言") }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text(notesLanguage == "source" ? L("会议原文") : L("我的语言")).lineLimit(1)
+                                    Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
+                                }
+                                .foregroundStyle(Ink.secondary)
+                            }
                         }
                     }
                     SectionLabel(text: L("面对面"))

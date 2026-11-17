@@ -137,7 +137,9 @@ final class RoomListen: ObservableObject {
             audio.voices = voices
             audio.mix = speakerMode
             audio.onInterruption = { [weak self] began in self?.interrupted(began) }
-            try audio.start(recognizer: stream, recording: AudioFileWriter.partial(store.systemAudioURL(s.id)))
+            // 保存会议录音 off: nothing is written; voiceprints still read the last minute in memory.
+            let keep = UserDefaults.standard.bool(forKey: Pref.recordAudio)
+            try audio.start(recognizer: stream, recording: keep ? AudioFileWriter.partial(store.systemAudioURL(s.id)) : nil)
             heardVoice = false
             audio.onLevel = { [weak self] v in
                 guard let self, !self.paused else { return }
@@ -250,7 +252,8 @@ final class RoomListen: ObservableObject {
         onStateChange?()
     }
 
-    func stop() {
+    /// `endedAt`: when the meeting really ended (结束会议 by itself: a little after the last words).
+    func stop(endedAt: Date? = nil) {
         guard isRunning else { return }
         isRunning = false
         paused = false
@@ -265,7 +268,7 @@ final class RoomListen: ObservableObject {
             reader?.cancel()
             notes.finish()
             // A meeting with no line is kept only when the microphone heard voices (its recording holds them).
-            store.end(heardSpeech: heardVoice)
+            store.end(at: endedAt, heardSpeech: heardVoice)
             debugLog("room: stopped lines=\(lines.count)")
             sessionID = nil
             startedAt = nil
@@ -402,7 +405,7 @@ final class RoomAudio: @unchecked Sendable {
 
     var fedSeconds: Double { queue.sync { fed } }
 
-    func start(recognizer: RecognitionStream, recording: URL) throws {
+    func start(recognizer: RecognitionStream, recording: URL?) throws {
         let session = AVAudioSession.sharedInstance()
         // .measurement: no voice processing, which would duck what the room says as "echo".
         // .defaultToSpeaker sends every app's sound to the speaker, not the earpiece, while we record.
