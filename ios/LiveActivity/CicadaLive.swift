@@ -122,13 +122,16 @@ struct ListenLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.leading) {
                     HStack(spacing: 8) {
                         LiveLogo(size: 26)
-                        Text("正在听").font(.footnote.weight(.semibold)).foregroundStyle(LiveInk.accent)
+                        Text(context.state.paused ? "已暂停" : "正在听").font(.footnote.weight(.semibold))
+                            .foregroundStyle(context.state.paused ? .white.opacity(0.6) : LiveInk.accent)
                     }
                     .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Elapsed(since: context.attributes.startedAt).font(.footnote.weight(.semibold))
-                        .foregroundStyle(.white).frame(maxWidth: 64, alignment: .trailing).padding(.trailing, 4)
+                    if !context.state.paused {
+                        Elapsed(since: context.attributes.startedAt).font(.footnote.weight(.semibold))
+                            .foregroundStyle(.white).frame(maxWidth: 64, alignment: .trailing).padding(.trailing, 4)
+                    }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -143,15 +146,20 @@ struct ListenLiveActivity: Widget {
                 }
             } compactLeading: {
                 HStack(spacing: 5) {
-                    Circle().fill(LiveInk.accent).frame(width: 7, height: 7)
+                    Circle().fill(context.state.paused ? LiveInk.grey : LiveInk.accent).frame(width: 7, height: 7)
                     LiveLogo(size: 20)
                 }
             } compactTrailing: {
-                Elapsed(since: context.attributes.startedAt)
-                    .font(.caption.weight(.semibold)).foregroundStyle(LiveInk.accent)
-                    .frame(maxWidth: 46)
+                // Paused: a still pause mark, not a clock that keeps running as if it were listening.
+                if context.state.paused {
+                    Image(systemName: "pause.fill").font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.6))
+                } else {
+                    Elapsed(since: context.attributes.startedAt)
+                        .font(.caption.weight(.semibold)).foregroundStyle(LiveInk.accent)
+                        .frame(maxWidth: 46)
+                }
             } minimal: {
-                Circle().fill(LiveInk.accent).frame(width: 9, height: 9)
+                Circle().fill(context.state.paused ? LiveInk.grey : LiveInk.accent).frame(width: 9, height: 9)
             }
             .keylineTint(LiveInk.accent)
         }
