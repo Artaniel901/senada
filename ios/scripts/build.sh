@@ -62,6 +62,7 @@ if [[ "${RELEASE:-}" != 1 ]]; then
   /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.wquguru.cicada.dev" \
     -c "Set :CFBundleName Cicada Dev" -c "Set :CFBundleDisplayName Cicada Dev" \
     -c "Add :LiveSubsDev string $STAMP" \
+    -c "Set :BGTaskSchedulerPermittedIdentifiers:0 com.wquguru.cicada.dev.import" \
     -c "Add :CFBundleURLTypes array" -c "Add :CFBundleURLTypes:0 dict" \
     -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string cicada-dev" \
     "$PLIST"

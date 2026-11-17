@@ -62,9 +62,20 @@ extension AppModel {
             debugLog("window: \(arg) \(devWindow.map { "\($0)" } ?? "screen")")
         case "stop":
             stopListening()
+        case "welcome":
+            // welcome:<0|1|2> opens 第一次打开 at that step; welcome:done closes it as 开始用知了 does
+            if arg == "done" { finishWelcome() } else { welcomeStep = Int(arg) ?? 0; showWelcome = true }
+        case "samplePlay":
+            welcomeStep = 1
+            showWelcome = true
+            playSample()
+        case "sampleStop":
+            stopSample()
         case "import":
-            // What the import button shows until M3.
-            comingSoon = L("导入录音或视频")
+            // import:<path>[|<path>…], a file on the Mac the simulator runs on, as if picked in Files
+            importFiles(arg.split(separator: "|").map { URL(fileURLWithPath: String($0)) })
+        case "importStop":
+            if let id = importer.current?.id { importer.cancel(id) }
         case "hear":
             // hear:room|speaker, 声音来源
             UserDefaults.standard.set(arg == "speaker" ? "speaker" : "room", forKey: Pref.hear)
@@ -228,6 +239,8 @@ extension AppModel {
             if p.count == 2, let t = vocabulary.terms.first(where: { $0.word == p[0] }) { addHeard(p[1], to: t) }
         case "wordDelete":
             if let t = vocabulary.terms.first(where: { $0.word == arg }) { deleteWord(t) }
+        case "importState":
+            debugLog("import busy=\(importer.busy) phase=\(importer.phase) progress=\(String(format: "%.2f", importer.progress)) queue=\(importer.queue.count) current=\(importer.current?.id ?? "-")")
         case "state":
             debugLog("room running=\(room.isRunning) lines=\(room.lines.count) draft=\(room.draft.count) level=\(room.level) status=\(room.status) speaker=\(room.speakerMode) paused=\(room.paused) pip=\(pip.isActive) session=\(room.sessionID ?? "-")")
             debugLog("state tab=\(tab.rawValue) selection=\(selection ?? "-") page=\(recordPage) sessions=\(store.sessions.count) query=\(query) notesLang=\(notesLanguageCode(selection ?? store.sessions.first?.id ?? "")) undo=\(speakerUndo?.text ?? "-")")

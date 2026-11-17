@@ -5,6 +5,8 @@ import SwiftUI
 struct CicadaApp: App {
     @StateObject private var model = AppModel()
 
+    init() { ImportBackground.register() }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -12,7 +14,7 @@ struct CicadaApp: App {
                 .environmentObject(model.ling)
                 .environmentObject(model.notes)
                 .environmentObject(model.room)
-                .onOpenURL { model.open($0) }
+                .onOpenURL { if !model.openedFile($0) { model.open($0) } }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
                     model.room.appBecameActive()
                 }
@@ -40,6 +42,8 @@ enum Pref {
     static let askNames = "askNames"
     /// 声音来源 (iOS only): "room", people at the table, or "speaker", video this phone plays aloud.
     static let hear = "iosHear"
+    /// 第一次打开's three steps are done (or skipped).
+    static let welcomed = "iosWelcomed"
     static var speakerMode: Bool { UserDefaults.standard.string(forKey: hear) == "speaker" }
 
     /// 对方说 on iOS: one language the user picks (detecting it comes later); the Mac's "auto" reads as English.
@@ -92,6 +96,20 @@ final class AppModel: ObservableObject {
         }
         return r
     }()
+    /// 导入录音或视频: the Mac's importer, with the iOS app's languages.
+    let importPrefs = ImportPrefs()
+    lazy var importer: FileImporter = {
+        let i = FileImporter(store: store, settings: importPrefs, translator: translator, profiles: nil)
+        // As on the Mac: a file transcribed to the end gets its notes when there is a key.
+        i.onFinished = { [weak self] id in
+            guard let self, self.ling.hasKey else { return }
+            self.notes.generate(for: id)
+        }
+        ImportBackground.importer = i
+        return i
+    }()
+    /// Why a picked file wasn't imported.
+    @Published var importProblem: String?
     let pip = PiPSubtitles()
     private var roomWatch: AnyCancellable?
     let liveActivity = LiveActivityController()
@@ -126,6 +144,9 @@ final class AppModel: ObservableObject {
     @Published var editingWord: String?
     @Published var deletedWord: DeletedWord?
     @Published var wordConflict: WordConflict?
+    /// 第一次打开 (Welcome.swift) and its step.
+    @Published var showWelcome = !UserDefaults.standard.bool(forKey: Pref.welcomed)
+    @Published var welcomeStep = 0
     /// Dev only: the iPad window size `window:` lays the app out at (DevWindow in Debug.swift).
     @Published var devWindow: CGSize?
 
@@ -244,6 +265,8 @@ final class AppModel: ObservableObject {
     }
 
     func deleteSession(_ id: String) {
+        importer.cancel(id)
+        ImportFiles.remove(store.session(id)?.sourcePath)
         if selection == id { selection = nil }
         searchPath.removeAll { $0 == id }
         if speakerUndo?.session == id { speakerUndo = nil }

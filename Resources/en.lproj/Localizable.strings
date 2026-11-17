@@ -1544,3 +1544,37 @@
 "标记这个人叫什么" = "Name this person";
 "标记人名…" = "Name…";
 "记住这个声音…" = "Remember This Voice…";
+
+/* iOS: first launch and import */
+"第 %lld 步，共 3 步" = "Step %lld of 3";
+"听会议室" = "Listen to the Room";
+"用麦克风听，实时双语字幕和纪要" = "Listens with the microphone: live bilingual subtitles and notes";
+"听会议室里的人说话" = "Hears the people in the room";
+"%@语音模型" = "%@ Speech Model";
+"在手机上把声音转成文字" = "Turns speech into text on this phone";
+"已就绪" = "Ready";
+"下载" = "Download";
+"线上会议里的声音请用电脑版" = "For online meetings, use the Mac app";
+"手机放出来，知了用麦克风听" = "The phone plays it, Cicada listens with the microphone";
+"播放示例" = "Play Sample";
+"放完了" = "Finished";
+"约 %lld 秒" = "About %lld s";
+"示例会议" = "Sample meeting";
+"按 ▶ 开始，字幕会出现在这里" = "Press ▶ and subtitles appear here";
+"没出字？把音量调大，手机别盖住" = "No text? Turn the volume up and keep the phone uncovered";
+"跳过" = "Skip";
+"听到了，继续" = "Heard It, Continue";
+"key 只存在这台手机上，不进备份" = "The key stays on this phone and out of backups";
+"纪要、改错和同声传译要用；不填也能看字幕" = "Needed for notes, fixes and interpreting; subtitles work without it";
+"填入 Ling key" = "Add a Ling Key";
+"没有 key？去 Ling 拿一个" = "No key? Get one from Ling";
+"开始用知了" = "Start Using Cicada";
+"以后再填" = "Later";
+"正在导入" = "Importing";
+"只能导入录音或带声音的视频" = "Only recordings or videos with sound can be imported";
+"从文件导入" = "Import from Files";
+"从相册导入视频" = "Import Video from Photos";
+"这个视频读不出来" = "This video can't be read";
+"切到别的 app 也会继续" = "Keeps going in other apps";
+"还有 %lld 个文件在排队" = "%lld more files waiting";
+"停止" = "Stop";

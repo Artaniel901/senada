@@ -22,11 +22,10 @@ struct RecordsSplit: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     HomeTitle(trailing: AnyView(
-                        Button { model.comingSoon = L("导入录音或视频") } label: { GlassIcon(systemName: "arrow.down.to.line") }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(Text("导入录音或视频"))))
+                        ImportMenu { GlassIcon(systemName: "arrow.down.to.line") }))
                     .padding(.top, 6)
                     ListenBar().padding(.top, 16)
+                    ImportCard(importer: model.importer)
                     if store.sessions.isEmpty {
                         EmptyRecords().frame(maxWidth: .infinity).padding(.top, 40)
                     } else {
@@ -98,13 +97,13 @@ struct PadRoot: View {
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
             HomeTitle(logo: 48, titleSize: 26, trailing: AnyView(HStack(spacing: 0) {
-                Button { model.comingSoon = L("导入录音或视频") } label: { PadIcon(systemName: "arrow.down.to.line") }
-                    .buttonStyle(.plain).accessibilityLabel(Text("导入录音或视频"))
+                ImportMenu { PadIcon(systemName: "arrow.down.to.line") }
                 Button { model.showSettings = true } label: { PadIcon(systemName: "gearshape") }
                     .buttonStyle(.plain).accessibilityLabel(Text("设置"))
             }))
             .padding(.horizontal, 4)
             ListenBar(onGlass: true).padding(.top, 14).padding(.bottom, 12)
+            ImportCard(importer: model.importer).padding(.top, -22).padding(.bottom, 12)
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Ink.secondary)
                 TextField(text: $model.query) { Text("搜索文字记录") }

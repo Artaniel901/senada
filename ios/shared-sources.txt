@@ -23,3 +23,4 @@ Sources/Cicada/Recognition.swift
 Sources/Cicada/CloudHearing.swift
 Sources/Cicada/SoundKind.swift
 Sources/Cicada/SpeakerProfiles.swift
+Sources/Cicada/FileImport.swift
