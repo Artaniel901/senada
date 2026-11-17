@@ -123,11 +123,20 @@ final class AppModel: ObservableObject {
     }()
     /// 导入录音或视频: the Mac's importer, with the iOS app's languages.
     let importPrefs = ImportPrefs()
+    /// 存到文件夹 (FolderPage.swift): the Mac's exporter, writing into a folder picked in Files.
+    let folderPrefs = FolderPrefs()
+    lazy var folderExport = FolderExporter(store: store, settings: folderPrefs)
+    @Published var showFolder = false
     lazy var importer: FileImporter = {
-        let i = FileImporter(store: store, settings: importPrefs, translator: translator, profiles: nil)
+        // 记住的人 name the voices of imported files too.
+        let i = FileImporter(store: store, settings: importPrefs, translator: translator, profiles: profiles)
         // As on the Mac: a file transcribed to the end gets its notes when there is a key.
         i.onFinished = { [weak self] id in
-            guard let self, self.ling.hasKey else { return }
+            guard let self else { return }
+            self.folderExport.ended(id)
+            for ref in self.store.session(id)?.voiceProfiles?.values ?? [:].values { self.profiles.markSeen(id: ref.id) }
+            self.speakerProfiles = self.profiles.all()
+            guard self.ling.hasKey else { return }
             self.notes.generate(for: id)
         }
         ImportBackground.importer = i
@@ -136,6 +145,17 @@ final class AppModel: ObservableObject {
     /// 面对面同声传译 (FaceView), over everything while it is open.
     lazy var face = FaceToFace(store: store, translator: translator, ling: ling)
     @Published var showFace = false
+    /// 记住的人 (PeoplePage.swift): the Mac's voiceprint store, what it holds, and the last problem.
+    let profiles = SpeakerProfileStore()
+    @Published var speakerProfiles: [SpeakerProfile] = []
+    @Published var speakerMemoryBusy = false
+    @Published var speakerProblem: (String, String)?
+    @Published var showPeople = false
+    /// The notes piece open for editing (NotesEdit.swift), and the meeting whose notes were just copied.
+    @Published var noteEdit: NoteEdit?
+    @Published var copiedNotes: String?
+    /// 设置 › AI 服务, pushed (a debug command opens it).
+    @Published var showAIService = false
     /// 设置 › 念给对方的声音, pushed (a debug command opens it).
     @Published var showVoices = false
     /// 设置 › 快速开始, pushed (a debug command opens it).
@@ -196,14 +216,18 @@ final class AppModel: ObservableObject {
                                                   Pref.fixMisheard: true, Pref.askNames: true, Pref.recordAudio: true,
                                                   Pref.silenceEnd: "prompt", Pref.silenceMinutes: 10.0])
         TranscriptExport.voices = UserDefaults.standard.bool(forKey: Pref.voices)
-        // Ling only for now: the Mac's other services (AIProvider) come to iOS with their settings.
-        ling.config = {
-            // Ming speaks 面对面 with the same key: without the voice model, every turn fell back to the phone's voice.
-            AIConfig(provider: .ling, base: AIProvider.ling.base,
-                     textModel: UserDefaults.standard.string(forKey: Pref.model) ?? LingClient.models[0],
-                     voiceModel: AIProvider.ling.voiceModels.first?.id, voiceBase: AIProvider.ling.base)
-        }
+        // 设置 › AI 服务 (AIServicePage.swift): the Mac's services and settings.
+        ling.config = { AIPrefs.config }
+        AIPrefs.applyVoices()
         wireNotes()
+        // 存到文件夹, as the Mac's AppModel: a meeting is written once settled and rewritten when it changes.
+        folderExport.settling = { [weak self] id in self?.notes.settling(id) ?? false }
+        store.onSave = { [weak self] id in self?.folderExport.saved(id) }
+        notes.finalDone = { [weak self] id in self?.folderExport.settled(id) }
+        room.onEnded = { [weak self] id in self?.folderExport.ended(id) }
+        room.profiles = profiles
+        speakerProfiles = profiles.all()
+        folderExport.retry()
         wireFixes()
         #if targetEnvironment(simulator)
         HostRecognizer.install()
@@ -339,6 +363,7 @@ final class AppModel: ObservableObject {
         searchPath.removeAll { $0 == id }
         if speakerUndo?.session == id { speakerUndo = nil }
         store.delete(id)
+        folderExport.deleted(id)
         debugLog("delete \(id) sessions=\(store.sessions.count)")
     }
 

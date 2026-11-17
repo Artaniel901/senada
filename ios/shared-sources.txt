@@ -26,3 +26,8 @@ Sources/Cicada/SpeakerProfiles.swift
 Sources/Cicada/FileImport.swift
 Sources/Cicada/ShareProjection.swift
 Sources/Cicada/ShareClient.swift
+Sources/Cicada/FolderExport.swift
+Sources/Cicada/RichCopy.swift
+Sources/Cicada/NotesEditing.swift
+Sources/Cicada/SpeakerEnrollment.swift
+Sources/Cicada/HandsFree.swift

@@ -26,21 +26,13 @@ struct SettingsView: View {
                     }
                     SectionLabel(text: L("AI 服务"))
                     Card {
-                        NavigationLink { KeyPage() } label: {
-                            row(Text(verbatim: "Ling key")) {
+                        NavigationLink { AIServicePage() } label: {
+                            row(Text(verbatim: ling.provider.id == .custom ? L("自定义服务") : ling.provider.name)) {
                                 KeyStatus(state: ling.keyState)
                                 Chevron()
                             }
                         }
                         .buttonStyle(RowPress())
-                        Hairline()
-                        row(Text("模型")) {
-                            Picker(selection: $aiModel) {
-                                ForEach(LingClient.models, id: \.self) { Text(verbatim: $0).tag($0) }
-                            } label: { Text("模型") }
-                            .pickerStyle(.menu)
-                            .tint(Ink.secondary)
-                        }
                         Hairline()
                         NavigationLink { WordListPage(vocabulary: model.vocabulary) } label: {
                             row(Text("词表")) {
@@ -68,6 +60,16 @@ struct SettingsView: View {
                                 .labelsHidden()
                                 .tint(Ink.ok)
                         }
+                        Hairline()
+                        NavigationLink { PeoplePage() } label: {
+                            row(Text("人员库")) {
+                                if !model.speakerProfiles.isEmpty {
+                                    Text(verbatim: "\(model.speakerProfiles.count)").foregroundStyle(Ink.secondary).monospacedDigit()
+                                }
+                                Chevron()
+                            }
+                        }
+                        .buttonStyle(RowPress())
                         Hairline()
                         helped(row(Text("保存会议录音")) {
                             Toggle(isOn: $recordAudio) { Text("保存会议录音") }
@@ -138,6 +140,17 @@ struct SettingsView: View {
                         }
                         .buttonStyle(RowPress())
                     }
+                    SectionLabel(text: L("会后存一份"))
+                    Card {
+                        NavigationLink { FolderPage(exporter: model.folderExport) } label: {
+                            row(Text("存到文件夹")) {
+                                Text(verbatim: model.folderExport.on ? model.folderExport.folder.map(FolderExporter.shortPath) ?? "" : L("关闭"))
+                                    .foregroundStyle(Ink.secondary).lineLimit(1)
+                                Chevron()
+                            }
+                        }
+                        .buttonStyle(RowPress())
+                    }
                     SectionLabel(text: L("快速开始"))
                     Card {
                         NavigationLink { QuickStartPage() } label: {
@@ -160,6 +173,9 @@ struct SettingsView: View {
             .navigationDestination(isPresented: $model.showWordList) { WordListPage(vocabulary: model.vocabulary) }
             .navigationDestination(isPresented: $model.showQuickStart) { QuickStartPage() }
             .navigationDestination(isPresented: $model.showVoices) { VoicesPage(face: model.face) }
+            .navigationDestination(isPresented: $model.showAIService) { AIServicePage() }
+            .navigationDestination(isPresented: $model.showFolder) { FolderPage(exporter: model.folderExport) }
+            .navigationDestination(isPresented: $model.showPeople) { PeoplePage() }
             .toolbar(sheet ? .visible : .hidden, for: .navigationBar)
             .navigationTitle(sheet ? Text("设置") : Text(""))
             .navigationBarTitleDisplayMode(.inline)
@@ -186,7 +202,7 @@ struct SettingsView: View {
     /// 念给对方的声音 at a glance: the voice the other person hears.
     private var voiceSummary: String {
         let lang = model.face.theirs.code
-        let id = SpeakVoices.chosenID(for: lang, hasKey: ling.hasKey)
+        let id = SpeakVoices.chosenID(for: lang, hasKey: ling.hasKey, clones: ling.clones)
         if id == VoiceCatalog.cloneOption.id { return L("我自己的声音") }
         return VoiceCatalog.options(for: lang).first { $0.id == id }?.name ?? L("手机自带")
     }
@@ -284,12 +300,16 @@ struct KeyPage: View {
                         }
                     }
                     .padding(.top, 16)
-                    Text("在 Ling 开放平台点“创建令牌”，复制以 sk- 开头的那串。")
-                        .font(.footnote).foregroundStyle(Ink.secondary)
-                        .padding(.horizontal, 4).padding(.top, 12)
-                    Link("打开 Ling 开放平台 ↗", destination: URL(string: "https://chat.ant-ling.com/platform/api")!)
-                        .font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 4).padding(.top, 8)
+                    if ling.provider.id == .ling {
+                        Text("在 Ling 开放平台点“创建令牌”，复制以 sk- 开头的那串。")
+                            .font(.footnote).foregroundStyle(Ink.secondary)
+                            .padding(.horizontal, 4).padding(.top, 12)
+                    }
+                    if let site = ling.provider.site {
+                        Link(ling.provider.id == .ling ? L("打开 Ling 开放平台 ↗") : L("获取 \(ling.provider.name) key ↗"), destination: site)
+                            .font(.footnote.weight(.semibold))
+                            .padding(.horizontal, 4).padding(.top, 8)
+                    }
                 }
                 if ling.key != nil && !editing {
                     HStack {
@@ -306,14 +326,14 @@ struct KeyPage: View {
             .frame(maxWidth: .infinity)
         }
         .background(Ink.ground)
-        .navigationTitle(Text(verbatim: "Ling key"))
+        .navigationTitle(Text(verbatim: ling.provider.id == .custom ? "Key" : "\(ling.provider.name) key"))
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private var detail: String? {
         switch ling.keyState {
-        case .ok(let s): L("\(aiModel) · 响应约 \(String(format: "%.1f", s)) 秒")
-        case .invalid: L("Ling 提示此令牌无效，请检查是否复制完整，或重新创建一个")
+        case .ok(let s): L("\(ling.config().textModel) · 响应约 \(String(format: "%.1f", s)) 秒")
+        case .invalid: ling.provider.id == .ling ? L("Ling 提示此令牌无效，请检查是否复制完整，或重新创建一个") : L("这个 key 用不了")
         case .unreachable(let why): why
         case .none: L("不填 key 时，字幕和翻译仍可正常使用")
         default: nil
