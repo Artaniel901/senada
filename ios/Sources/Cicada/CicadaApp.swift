@@ -183,8 +183,10 @@ final class AppModel: ObservableObject {
         TranscriptExport.voices = UserDefaults.standard.bool(forKey: Pref.voices)
         // Ling only for now: the Mac's other services (AIProvider) come to iOS with their settings.
         ling.config = {
+            // Ming speaks 面对面 with the same key: without the voice model, every turn fell back to the phone's voice.
             AIConfig(provider: .ling, base: AIProvider.ling.base,
-                     textModel: UserDefaults.standard.string(forKey: Pref.model) ?? LingClient.models[0])
+                     textModel: UserDefaults.standard.string(forKey: Pref.model) ?? LingClient.models[0],
+                     voiceModel: AIProvider.ling.voiceModels.first?.id, voiceBase: AIProvider.ling.base)
         }
         wireNotes()
         wireFixes()
