@@ -163,6 +163,36 @@ extension AppModel {
             // A meeting without the microphone or the recognizer, fed lines by `heard:`.
             RoomListen.silent = arg != "off"
         case "heard": room.debugHeard(arg)
+        case "voices":
+            // voices[:off] opens 设置 › 念给对方的声音; voice:<lang>=<id> picks one; voiceSay:<lang> reads a sample
+            tab = .settings
+            showSettings = true
+            showVoices = arg != "off"
+        case "voice":
+            let p = arg.split(separator: "=", maxSplits: 1).map(String.init)
+            if p.count == 2 { SpeakVoices.set(p[1], for: p[0]); objectWillChange.send() }
+            debugLog("voices: \(SpeakVoices.all) own=\(VoiceReference.exists)")
+        case "share":
+            // share:notes|full shares the open meeting (else the newest) as 分享链接 does; unshare revokes it
+            guard let s = store.session(selection ?? store.sessions.first?.id) else { break }
+            Task {
+                switch await ShareClient.shared.share(s, .init(scope: arg == "full" ? .full : .notes)) {
+                case .shared(let r): debugLog("share: link \(r.url) expires \(r.expiresAt)")
+                case .blocked(let hits, _): debugLog("share: blocked \(hits.count) hits")
+                case .failed(let code, _): debugLog("share: failed \(code)")
+                }
+            }
+        case "unshare":
+            guard let id = selection ?? store.sessions.first?.id, let r = ShareStore.read(id) else { break }
+            Task { debugLog("share: revoked \(await ShareClient.shared.revoke(r, sessionID: id))") }
+        case "endTimes":
+            // endTimes:<silence>,<countdown> in seconds (结束会议 by itself, to test it); endTimes:off
+            let p = arg.split(separator: ",").compactMap { Double($0) }
+            endTimesOverride = p.count == 2 ? (p[0], p[1]) : nil
+            debugLog("meeting end: times \(String(describing: endTimesOverride))")
+        case "endState":
+            debugLog("meeting end: pending=\(ending.map { "\($0.reason)" } ?? "-") watching=\(endWatch != nil)")
+        case "keepRecording": keepRecording()
         case "translateFail":
             // translateFail:<n>: the next n sentences fail on every provider, as on the Mac.
             translator.failNext = Int(arg) ?? 1
