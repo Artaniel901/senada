@@ -1651,3 +1651,6 @@
 "已复制纪要，贴进飞书、钉钉、Notion 就是排好的" = "Notes copied. Paste into Feishu, DingTalk or Notion and they keep their formatting";
 "声纹只保存在这台手机；可以写备注，也可以删除。" = "Voiceprints stay only on this phone. Add notes or delete them here.";
 "请先确认对方知道。声纹只保存在这台手机，用于以后会议认出这个人，可随时在人员库里删除。" = "Make sure they know first. The voiceprint stays only on this phone, is used to recognize this person in later meetings, and can be deleted from People anytime.";
+
+/* iOS: playback */
+"播放进度" = "Playback position";

@@ -65,7 +65,8 @@ struct RecordView: View {
                                         onEdit: { l, start in model.editingLine = LineEdit(session: session.id, line: l.id, start: start) })
                             .padding(.top, 14)
                     }
-                    TranscriptList(session: session, playing: player.lineID(in: session), focus: picked ?? playingNumber(voicesOn ? TranscriptExport.speakerNumbers(session) : [:]), dimOthers: picked != nil) { player.seek($0) }
+                    TranscriptList(session: session, playing: player.lineID(in: session), focus: picked ?? playingNumber(voicesOn ? TranscriptExport.speakerNumbers(session) : [:]), dimOthers: picked != nil,
+                                   playable: player.available) { player.play(from: $0) }
                 case .notes:
                     if notes.generatingID == session.id {
                         HStack(spacing: 10) {
@@ -89,6 +90,14 @@ struct RecordView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .debugScroll)) { n in
             if let id = n.object as? String { proxy.scrollTo(id, anchor: .center) }
+        }
+        // The transcript follows the recording while it plays, until scrolled by hand (as on the Mac).
+        .onScrollPhaseChange { _, phase in if phase == .interacting { player.userScrolled() } }
+        .onChange(of: player.lineID(in: session)) { _, id in
+            if player.playing, player.following, model.recordPage == .transcript, let id { withAnimation { proxy.scrollTo(id, anchor: .center) } }
+        }
+        .onChange(of: player.following) { _, on in
+            if on, model.recordPage == .transcript, let id = player.lineID(in: session) { withAnimation { proxy.scrollTo(id, anchor: .center) } }
         }
         }
         .background(Color.white)
@@ -130,12 +139,20 @@ struct RecordView: View {
             }
             if model.copiedNotes == session.id { CopiedToast().padding(.horizontal, 16).padding(.bottom, player.available ? 0 : 8) }
             if !player.available { FixToast(fixes: model.fixes).padding(.horizontal, 16).padding(.bottom, 8) }
+            if !player.available, player.missing {
+                Text(player.own ? L("找不到录音，没法播放") : L("找不到原文件，没法播放"))
+                    .font(.footnote).foregroundStyle(Ink.secondary)
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .glassEffect(.regular, in: Capsule())
+                    .padding(.bottom, 8)
+            }
             if player.available {
                 VStack(spacing: 8) {
                     if let u = model.speakerUndo, u.session == session.id, !u.text.isEmpty {
                         SpeakerUndoBar(text: u.text) { model.undoSpeakerEdit() }
                     }
                     FixToast(fixes: model.fixes)
+                    FollowPill(player: player)
                     PlayerBar(player: player)
                 }
                     .padding(.horizontal, 16)
@@ -159,7 +176,7 @@ struct RecordView: View {
         .onChange(of: session.id) { titleDraft = nil; model.focusSpeaker = nil; model.openLine = nil; player.load(store: model.store, session: session) }
         .onDisappear { player.stop() }
         .onReceive(NotificationCenter.default.publisher(for: .debugPlay)) { n in
-            if let t = n.object as? Double { player.seek(t) }
+            if let t = n.object as? Double { player.play(from: t) }
         }
     }
 
@@ -312,6 +329,8 @@ struct TranscriptList: View {
     var focus: Int? = nil
     /// A speaker was picked on purpose: the others' lines step back.
     var dimOthers = false
+    /// With a recording, a tap on a line plays from it (and opens what was fixed in it, if anything).
+    var playable = false
     let seek: (Double) -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
     /// The design's 14 pt grey original over a 16 pt translation, scaling with the text size.
@@ -351,7 +370,12 @@ struct TranscriptList: View {
                     }
                 }
                 .contentShape(Rectangle())
-                .onTapGesture { withAnimation(.snappy(duration: 0.2)) { model.openLine = model.openLine == l.id ? nil : l.id } }
+                .onTapGesture {
+                    if playable { seek(l.t) }
+                    if !playable || !FixedText.applied(l).isEmpty {
+                        withAnimation(.snappy(duration: 0.2)) { model.openLine = model.openLine == l.id ? nil : l.id }
+                    }
+                }
                 // Held: the same, and 拷贝 (a long press here can't also select text).
                 .contextMenu {
                     Button { edit(l) } label: { Label("改这句…", systemImage: "pencil") }
@@ -517,58 +541,116 @@ struct FishboneList: View {
 
 // MARK: - The recording
 
-/// Plays the meeting's system.m4a; the transcript follows it and its times seek.
+/// Plays what the record was heard from, as the Mac's RecordingPlayer: the meeting's own recording,
+/// or an imported file (audio or video) where it was copied in. The transcript follows it while it
+/// plays, until scrolled by hand; a line, or the bar, seeks.
 @MainActor
 final class RecordPlayer: ObservableObject {
     @Published private(set) var now: Double = 0
     @Published private(set) var playing = false
-    private(set) var duration: Double = 0
-    private var audio: AVAudioPlayer?
-    private var timer: Timer?
-
-    var available: Bool { audio != nil }
-
+    @Published private(set) var rate: Float = 1
+    @Published private(set) var following = true
+    /// The record says there is audio, but the file isn't there (`own`: the meeting's recording,
+    /// else the imported file).
+    @Published private(set) var missing = false
+    @Published private(set) var own = true
+    @Published private(set) var duration: Double = 0
+    private var player: AVPlayer?
+    private var observer: Any?
+    private var ended: NSObjectProtocol?
     private var loaded: String?
 
-    /// The meeting's recording; another meeting's replaces it (the page is reused when one is picked).
+    var available: Bool { player != nil }
+
+    /// Another meeting's replaces it (the page is reused when one is picked).
     func load(store: SessionStore, session: Session) {
         guard loaded != session.id else { return }
-        stop()
+        unload()
         loaded = session.id
-        audio = nil
+        let fm = FileManager.default
+        var url: URL?
+        if session.sourceFile != nil, let path = session.sourcePath {
+            own = false
+            let u = AppModel.inThisContainer(path)
+            if fm.fileExists(atPath: u.path) { url = u } else { missing = true }
+        } else if session.hasAudio {
+            let system = store.systemAudioURL(session.id), partial = AudioFileWriter.partial(system)
+            url = [system, partial].first { fm.fileExists(atPath: $0.path) }
+            missing = url == nil
+        }
+        guard let url else { return }
+        let p = AVPlayer(url: url)
+        player = p
+        observer = p.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] t in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.now = t.seconds.isFinite ? t.seconds : 0
+                if self.duration == 0, let d = p.currentItem?.duration.seconds, d.isFinite { self.duration = d }
+            }
+        }
+        ended = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: p.currentItem, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.playing = false }
+        }
+        Task {
+            if let d = try? await p.currentItem?.asset.load(.duration).seconds, d.isFinite { duration = d }
+        }
+        debugLog("player: \(own ? "recording" : "imported file") \(url.lastPathComponent)")
+    }
+
+    private func unload() {
+        if let observer { player?.removeTimeObserver(observer) }
+        if let ended { NotificationCenter.default.removeObserver(ended) }
+        player?.pause()
+        player = nil
+        observer = nil
+        ended = nil
+        playing = false
+        missing = false
+        own = true
+        following = true
         now = 0
         duration = 0
-        objectWillChange.send()
-        guard session.hasAudio else { return }
-        let url = store.systemAudioURL(session.id)
-        guard let a = try? AVAudioPlayer(contentsOf: url) else { return }
-        audio = a
-        duration = a.duration
-        objectWillChange.send()
     }
 
     func toggle() {
-        guard let audio else { return }
-        if audio.isPlaying { audio.pause(); playing = false; timer?.invalidate(); return }
-        try? AVAudioSession.sharedInstance().setCategory(.playback)
-        audio.play(); playing = true
-        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, let a = self.audio else { return }
-                self.now = a.currentTime
-                if !a.isPlaying { self.playing = false; self.timer?.invalidate() }
-            }
+        guard let player else { return }
+        if playing {
+            player.pause()
+        } else {
+            try? AVAudioSession.sharedInstance().setCategory(.playback)
+            try? AVAudioSession.sharedInstance().setActive(true)
+            if duration > 0, now >= duration - 0.3 { player.seek(to: .zero) }
+            player.playImmediately(atRate: rate)
+            following = true
         }
+        playing.toggle()
+    }
+
+    /// Plays from `t` (a line, the bar): the transcript follows again from there.
+    func play(from t: Double) {
+        guard player != nil else { return }
+        seek(t)
+        following = true
+        if !playing { toggle() }
     }
 
     func seek(_ t: Double) {
-        guard let audio else { return }
-        audio.currentTime = min(max(0, t), duration)
-        now = audio.currentTime
-        if !audio.isPlaying { toggle() }
+        guard let player else { return }
+        let to = min(max(0, t), max(duration, t))
+        player.seek(to: CMTime(seconds: to, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        now = to
     }
 
-    func stop() { audio?.stop(); playing = false; timer?.invalidate() }
+    func nextRate() {
+        rate = rate >= 2 ? 1 : rate + 0.5
+        if playing { player?.rate = rate }
+    }
+
+    /// The transcript was scrolled by hand while it plays: it stops following until 回到正在播放.
+    func userScrolled() { if following, playing { following = false } }
+    func follow() { following = true }
+
+    func stop() { player?.pause(); playing = false }
 
     /// The last line that started at or before the playhead, once playing has begun.
     func lineID(in s: Session) -> String? {
@@ -577,12 +659,13 @@ final class RecordPlayer: ObservableObject {
     }
 }
 
-/// The design's glass bar: play / pause, a progress line, the time and the length.
+/// The design's glass bar: play / pause, the time, a bar to drag, the length and the speed; when the
+/// file is gone, why it can't play.
 struct PlayerBar: View {
     @ObservedObject var player: RecordPlayer
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Button(action: player.toggle) {
                 Image(systemName: player.playing ? "pause.fill" : "play.fill")
                     .font(.system(size: 16, weight: .bold))
@@ -591,15 +674,12 @@ struct PlayerBar: View {
                     .background(Ink.ink, in: Circle())
             }
             .accessibilityLabel(player.playing ? Text("暂停") : Text("播放"))
-            VStack(spacing: 6) {
-                GeometryReader { g in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Ink.line)
-                        Capsule().fill(Ink.accent)
-                            .frame(width: g.size.width * (player.duration > 0 ? min(1, player.now / player.duration) : 0))
-                    }
-                }
-                .frame(height: 4)
+            VStack(spacing: 0) {
+                Slider(value: Binding(get: { min(player.now, max(player.duration, 1)) }, set: { player.seek($0) }),
+                       in: 0...max(player.duration, 1))
+                    .tint(Ink.accent)
+                    .controlSize(.mini)
+                    .accessibilityLabel(Text("播放进度"))
                 HStack {
                     Text(TranscriptExport.clock(player.now))
                     Spacer()
@@ -608,11 +688,34 @@ struct PlayerBar: View {
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(Ink.secondary)
             }
+            Button { player.nextRate() } label: {
+                Text(verbatim: player.rate == 1 ? "1×" : player.rate == 1.5 ? "1.5×" : "2×")
+                    .font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(Ink.ink)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("播放速度"))
         }
         .padding(.leading, 8)
-        .padding(.trailing, 18)
+        .padding(.trailing, 8)
         .frame(height: 62)
         .glassEffect(.regular, in: Capsule())
+    }
+}
+
+/// 回到正在播放: the transcript was scrolled away while it plays.
+struct FollowPill: View {
+    @ObservedObject var player: RecordPlayer
+    var body: some View {
+        if player.playing && !player.following {
+            Button { player.follow() } label: {
+                Label("回到正在播放", systemImage: "arrow.down.to.line")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Ink.ink)
+                    .padding(.horizontal, 14).frame(minHeight: 36)
+                    .glassEffect(.regular, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
     }
 }
 
