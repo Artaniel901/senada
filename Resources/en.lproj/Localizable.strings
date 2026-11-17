@@ -1636,3 +1636,18 @@
 "分享链接" = "Share link";
 "Ling 不可用时自动换成手机的声音" = "Falls back to the phone's voice when Ling is unavailable";
 "听起来不像或有杂音？换个安静的地方重录一次。录音只存在这台手机上，可随时删除。" = "Doesn't sound like you, or noisy? Record again somewhere quiet. The recording stays on this phone and can be deleted anytime.";
+
+/* iOS: AI services, save to folder, notes copy and edit, remembered people, hands-free */
+"地址要用 https；这台手机和局域网里的服务可以用 http。" = "The address must use https; services on this phone or your local network can use http.";
+"不用 key" = "No key needed";
+"%@ 的 key" = "%@ key";
+"Key（局域网里的服务可以不填）" = "Key (optional for a service on your local network)";
+"轮到你时点这里" = "Tap here when it's your turn";
+"在听你说 · 停一下就翻译" = "Listening · pause and it translates";
+"不用按键 · 说完停一下就翻译，念完轮到对方" = "Hands-free · pause to translate; then it's their turn";
+"换个文件夹后自动补存" = "Pick another folder and the missed ones are saved";
+"在“文件”里选一次文件夹：iCloud 云盘、Obsidian 库，或其他支持“文件”的 app。" = "Pick a folder once in Files: iCloud Drive, an Obsidian vault, or any app that works with Files.";
+"改这一条" = "Edit this";
+"已复制纪要，贴进飞书、钉钉、Notion 就是排好的" = "Notes copied. Paste into Feishu, DingTalk or Notion and they keep their formatting";
+"声纹只保存在这台手机；可以写备注，也可以删除。" = "Voiceprints stay only on this phone. Add notes or delete them here.";
+"请先确认对方知道。声纹只保存在这台手机，用于以后会议认出这个人，可随时在人员库里删除。" = "Make sure they know first. The voiceprint stays only on this phone, is used to recognize this person in later meetings, and can be deleted from People anytime.";
