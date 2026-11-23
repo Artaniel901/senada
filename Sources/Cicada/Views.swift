@@ -822,6 +822,8 @@ struct MainWindowView: View {
     @State private var dropping = false
     @State private var selection: String?
     @State private var query = ""
+    /// Which of the shown record's matches the search is on (#33: a search opens the line, not just the meeting).
+    @State private var matchIndex = 0
     @State private var view = "both"
     @State private var tab = "notes"
     @State private var jumpTo: Double?
@@ -849,9 +851,29 @@ struct MainWindowView: View {
     private var filtered: [Session] {
         guard !query.isEmpty else { return store.sessions }
         return store.sessions.filter { s in
-            s.displayTitle.localizedCaseInsensitiveContains(query)
-                || s.lines.contains { $0.shown.localizedCaseInsensitiveContains(query) || ($0.dst ?? "").localizedCaseInsensitiveContains(query) }
+            let terms = TranscriptSearch.terms(query, notes: s.notes?.terms ?? [])
+            return s.displayTitle.localizedCaseInsensitiveContains(query) || s.lines.contains { TranscriptSearch.matches($0, terms) }
         }
+    }
+
+    /// The search in the shown record: its terms (misheard names too), the lines found, the one being looked at.
+    private var searchTerms: [String] { TranscriptSearch.terms(query, notes: current?.notes?.terms ?? []) }
+    private var matches: [String] { TranscriptSearch.matches(current?.lines ?? [], searchTerms) }
+    private var currentMatch: String? {
+        let ms = matches
+        return ms.isEmpty ? nil : ms[min(matchIndex, ms.count - 1)]
+    }
+
+    private func step(_ d: Int) {
+        let n = matches.count
+        guard n > 0 else { return }
+        matchIndex = (min(matchIndex, n - 1) + d + n) % n
+    }
+
+    /// A search that finds lines in the shown record opens its transcript at the first one.
+    private func showMatches() {
+        matchIndex = 0
+        if !matches.isEmpty, let s = current, importer.status(of: s) == nil { tab = "transcript" }
     }
 
     private var current: Session? { store.session(selection ?? store.sessions.first?.id) }
@@ -888,6 +910,8 @@ struct MainWindowView: View {
         } isTargeted: { dropping = $0 }
         .overlay { if dropping { ImportDropOverlay() } }
         .onChange(of: current?.id, initial: true) { _, _ in loadPlayer() }
+        .onChange(of: query) { _, _ in showMatches() }
+        .onChange(of: selection) { _, _ in if !query.isEmpty { showMatches() } }
         // A meeting that ends while it is shown, and its recording once it is rewrapped into an .m4a.
         .onChange(of: store.liveID) { _, _ in loadPlayer() }
         // Opened afresh: a file opened before the room was mixed in (#19) would play one side only.
@@ -901,6 +925,13 @@ struct MainWindowView: View {
             }
         }
         .onDisappear { wordClick.remove() }
+        .onReceive(NotificationCenter.default.publisher(for: .debugMainSearch)) { n in
+            if let text = n.object as? String { query = text } else if let d = n.object as? Int { step(d) }
+            DispatchQueue.main.async {
+                debugLog("main search: \"\(query)\" \(filtered.count) meetings, shown \(current?.id ?? "-") tab=\(tab) "
+                         + "matches=\(matches.count) at=\(currentMatch ?? "-")")
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .debugPlay)) { n in
             if let t = n.object as? Double { player.play(from: t) }
         }
@@ -925,6 +956,7 @@ struct MainWindowView: View {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Palette.secondary)
                 TextField("搜索", text: $query).textFieldStyle(.plain).focused($searchFocused)
+                    .onSubmit { step(1) }
                 if query.isEmpty {
                     Text("⌘F").font(.system(size: 11)).foregroundStyle(Palette.secondary)
                 } else {
@@ -934,7 +966,8 @@ struct MainWindowView: View {
             }
             .font(.system(size: 13))
             .padding(.horizontal, 12).frame(height: 30)
-            .padding(.bottom, 6)
+            .padding(.bottom, query.isEmpty || matches.isEmpty ? 6 : 0)
+            if !query.isEmpty, !matches.isEmpty { matchBar }
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
@@ -974,6 +1007,27 @@ struct MainWindowView: View {
             // A meeting picked from elsewhere (search, the notes window) shouldn't hide in a fold.
             if let id, let first = RecordList.groups(filtered).first, !first.sessions.contains(where: { $0.id == id }) { showOlder = true }
         }
+    }
+
+    /// Where the search is in the shown record: 本场 2 / 7, and a way to the previous and next line.
+    private var matchBar: some View {
+        let n = matches.count
+        return HStack(spacing: 2) {
+            Text("本场 \(min(matchIndex, n - 1) + 1) / \(n)")
+                .font(.system(size: 12).monospacedDigit()).foregroundStyle(Palette.secondary)
+            Spacer(minLength: 4)
+            matchButton("chevron.up", help: L("上一个")) { step(-1) }
+            matchButton("chevron.down", help: L("下一个")) { step(1) }
+        }
+        .padding(.leading, 12).padding(.trailing, 6).padding(.bottom, 6)
+    }
+
+    private func matchButton(_ icon: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.secondary)
+                .frame(width: 24, height: 22).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).help(help).accessibilityLabel(help)
     }
 
     private func sessionRow(_ s: Session) -> some View {
@@ -1406,6 +1460,8 @@ struct MainWindowView: View {
                     let starts = SpeakerLabels.runStarts(s.lines, speakers).union(both ? RecordList.placeStarts(s.lines) : [])
                     let voices = SpeakerLabels.voiceNumbers(s)
                     let playingLine = player.lineID(in: s)
+                    let terms = searchTerms
+                    let found = currentMatch
                     if s.id != store.liveID {
                         FixReviewBanner(fixes: model.fixes, session: s, onShow: { id in withAnimation { proxy.scrollTo(id, anchor: .center) } },
                                         onEdit: { l, suggestion in editingStart = suggestion; editingLine = l.id; proxy.scrollTo(l.id, anchor: .center) })
@@ -1413,7 +1469,7 @@ struct MainWindowView: View {
                     }
                     ForEach(s.lines) { l in
                         lineRow(l, speaker: speakers[l.id], label: speakers.isEmpty || settings.speakerEveryLine || starts.contains(l.id), voices: !speakers.isEmpty, place: both, in: s,
-                                current: l.id == playingLine)
+                                current: l.id == playingLine, terms: terms, found: l.id == found)
                             .contextMenu {
                                 Button(L("改这句…")) { editingStart = l.shown; editingLine = l.id }
                                 if !speakers.isEmpty, l.speaker == "them" { assignMenu(s, l, voices) }
@@ -1473,14 +1529,22 @@ struct MainWindowView: View {
                     withAnimation { proxy.scrollTo(id, anchor: .center) }
                 }
             }
+            .onChange(of: currentMatch) { _, id in
+                if let id { withAnimation { proxy.scrollTo(id, anchor: .center) } }
+            }
             .onAppear {
                 if let t = jumpTo, let l = s.lines.first(where: { $0.t >= t - 1 }) { proxy.scrollTo(l.id, anchor: .top) }
+                else if let id = currentMatch {
+                    // Opened by a search: the lazy list needs a moment to lay out before it can go to the line found.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { proxy.scrollTo(id, anchor: .center) }
+                }
                 jumpTo = nil
             }
         }
     }
 
-    private func lineRow(_ l: TranscriptLine, speaker: Int? = nil, label: Bool = true, voices: Bool = false, place: Bool = false, in shownSession: Session? = nil, current: Bool = false) -> some View {
+    private func lineRow(_ l: TranscriptLine, speaker: Int? = nil, label: Bool = true, voices: Bool = false, place: Bool = false, in shownSession: Session? = nil, current: Bool = false,
+                         terms: [String] = [], found: Bool = false) -> some View {
         let me = l.speaker == "me"
         let playable = shownSession.map { player.sessionID == $0.id && player.ready } ?? false
         let hovered = playable && hoveredLine == l.id && editingLine != l.id
@@ -1550,14 +1614,14 @@ struct MainWindowView: View {
                 if editingLine == l.id, let s = shownSession {
                     LineEditor(line: l, session: s.id, fixes: model.fixes, start: editingStart) { editingLine = nil }
                 } else if view != "dst" {
-                    Text(TranscriptParagraphs.joinFixed([l]))
+                    Text(TranscriptSearch.highlighted(TranscriptParagraphs.joinFixed([l]), terms, current: found))
                         .font(.system(size: view == "src" ? 15 : 13))
                         .foregroundStyle(view == "src" ? Palette.ink : Palette.tertiary)
                         .lineSpacing(2)
                         .textSelection(.enabled)
                 }
                 if view != "src" {
-                    Text(l.dst ?? L("翻译中…"))
+                    Text(l.dst.map { TranscriptSearch.highlighted(AttributedString($0), terms, current: found) } ?? AttributedString(L("翻译中…")))
                         .font(.system(size: 15)).lineSpacing(3)
                         .foregroundStyle(l.dst == nil ? Palette.tertiary : Palette.ink)
                         .textSelection(.enabled)
@@ -1866,6 +1930,7 @@ struct LanguageNotice: View {
 extension Notification.Name {
     /// Debug `play:<seconds>`: the shown record plays from there.
     static let debugPlay = Notification.Name("cicada.debugPlay")
+    static let debugMainSearch = Notification.Name("cicada.debugMainSearch")
     /// Debug `shareSheet:<id>`: the 分享… sheet opens for that record (no id: it closes).
     static let debugShareSheet = Notification.Name("cicada.debugShareSheet")
 }

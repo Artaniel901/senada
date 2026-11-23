@@ -2342,6 +2342,11 @@ final class AppModel: ObservableObject {
                 try? png.write(to: URL(fileURLWithPath: arg))
             }
         case "mainShow": mainShow = arg
+        case "mainSearch":
+            // Types into the records window's search (⌘F); mainSearchStep:<1|-1> is Return / the arrows.
+            NotificationCenter.default.post(name: .debugMainSearch, object: arg)
+        case "mainSearchStep":
+            NotificationCenter.default.post(name: .debugMainSearch, object: Int(arg) ?? 1)
         case "play":
             // The shown record plays from <seconds>, as a click on a line's time does.
             if let t = Double(arg) { NotificationCenter.default.post(name: .debugPlay, object: t) }

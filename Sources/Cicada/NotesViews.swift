@@ -897,25 +897,14 @@ struct TranscriptListView<Partial: View>: View, Equatable {
         .transition(.opacity)
     }
 
-    private func matches(_ l: TranscriptLine) -> Bool {
-        terms.contains { l.shown.localizedCaseInsensitiveContains($0) || (l.dst ?? "").localizedCaseInsensitiveContains($0) }
-    }
+    private func matches(_ l: TranscriptLine) -> Bool { TranscriptSearch.matches(l, terms) }
 
     private func highlighted(_ text: String, current: Bool) -> AttributedString {
-        highlighted(AttributedString(text), current: current)
+        TranscriptSearch.highlighted(AttributedString(text), terms, current: current)
     }
 
     private func highlighted(_ base: AttributedString, current: Bool) -> AttributedString {
-        var a = base
-        for term in terms where !term.isEmpty {
-            var from = a.startIndex
-            while from < a.endIndex, let r = a[from...].range(of: term, options: .caseInsensitive) {
-                a[r].backgroundColor = current ? Palette.accent : Palette.accentPale
-                a[r].foregroundColor = current ? .white : Palette.accentInk
-                from = r.upperBound
-            }
-        }
-        return a
+        TranscriptSearch.highlighted(base, terms, current: current)
     }
 
     private func row(_ ls: [TranscriptLine], label: Bool = true) -> some View {

@@ -1654,3 +1654,4 @@
 
 /* iOS: playback */
 "播放进度" = "Playback position";
+"本场 %lld / %lld" = "This meeting %lld / %lld";

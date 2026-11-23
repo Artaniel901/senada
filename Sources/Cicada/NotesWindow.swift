@@ -462,27 +462,9 @@ struct NotesWindowView: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(searchFocused ? Palette.accent : .clear, lineWidth: 1.5))
     }
 
-    /// The query, plus every way the notes say that name was heard (江充 also finds 江松).
-    private var searchTerms: [String] {
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return [] }
-        var out = [q]
-        for t in engine.notes.terms {
-            let forms = [t.name] + t.heard
-            if forms.contains(where: { $0.localizedCaseInsensitiveContains(q) || q.localizedCaseInsensitiveContains($0) }) {
-                out += forms.filter { !out.contains($0) }
-            }
-        }
-        return out
-    }
+    private var searchTerms: [String] { TranscriptSearch.terms(query, notes: engine.notes.terms) }
 
-    private var matches: [String] {
-        let terms = searchTerms
-        guard !terms.isEmpty else { return [] }
-        return (session?.lines ?? []).filter { l in
-            terms.contains { l.shown.localizedCaseInsensitiveContains($0) || (l.dst ?? "").localizedCaseInsensitiveContains($0) }
-        }.map(\.id)
-    }
+    private var matches: [String] { TranscriptSearch.matches(session?.lines ?? [], searchTerms) }
 
     private var currentIndex: Int { matches.isEmpty ? 0 : min(matchIndex, matches.count - 1) }
 
