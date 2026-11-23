@@ -15,7 +15,7 @@ from gi.repository import Gdk, GLib, Gtk, Pango
 
 from ..core import notes as notesmod
 from ..core import problem
-from ..core import live_fixes, roommic, speakers
+from ..core import live_fixes, roommic, speakers, transcript_search
 from ..core.strings import L, LF
 from ..core.support import Log, clock
 from . import ui, x11
@@ -455,16 +455,7 @@ class NotesWindow(Gtk.Window):
         self._fill_transcript(scroll=True)
 
     def _terms(self) -> list:
-        """The query, plus every way the notes say that name was heard (江充 also finds 江松)."""
-        q = self.query.strip()
-        if not q:
-            return []
-        out = [q]
-        for t in self.app.notes.notes.terms:
-            forms = [t.name] + list(t.heard)
-            if any(f and (q.lower() in f.lower() or f.lower() in q.lower()) for f in forms):
-                out += [f for f in forms if f and f not in out]
-        return out
+        return transcript_search.terms(self.query, self.app.notes.notes.terms)
 
     def _fill_transcript(self, scroll: bool = False) -> None:
         if not self.transcript_col.get_visible():
@@ -472,11 +463,10 @@ class NotesWindow(Gtk.Window):
         session = self._session()
         lines = session.lines if session else []
         terms = self._terms()
-        low = [t.lower() for t in terms]
 
         def hit(l):
-            return any(t in l.shown.lower() or t in (l.dst or "").lower() for t in low)
-        self.matches = [l.id for l in lines if hit(l)] if terms else []
+            return transcript_search.line_matches(l, terms)
+        self.matches = transcript_search.matches(lines, terms)
         if self.matches:
             self.match_index %= len(self.matches)
         current = self.matches[self.match_index] if self.matches else None

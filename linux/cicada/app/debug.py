@@ -11,6 +11,8 @@ per connection, one JSON line back. Never in release builds.
   speak-enable on|off | speak on|off (同声传译) | quit
   calls <program=name,…>|none|real (meeting apps in a call) | endtimes <silence> <countdown> <grace>|off | endkeep
   notes-tab notes|transcript | notes-search <text> | notes-wide on|off | onboarding-step <n> | settings-scroll <0-1>
+  records-search <text> (typed into the records window's Ctrl+F search) | records-search-step 1|-1 (Enter / the arrows):
+           how many meetings it finds, the shown one, its matches and the line being looked at
   settings-models on|off (unfold 自己选模型)
   ai-check-sim <reason|lowBalance|off> (every check ends this way: screenshots of each state) | ai-check (check now)
   ask settings|fix|close (answer the 开始听 dialog a failed check put up) | settings-ai (设置 at AI 服务) | tray-menu
@@ -461,6 +463,21 @@ def command(app, line: str) -> dict:
         else:
             w.set_wide(arg == "on")
         return {"ok": True, "tab": w.tab, "wide": w.wide, "matches": len(w.matches), "match": w.match_index}
+    if cmd in ("records-search", "records-search-step"):
+        app.show_records()
+        w = app.records_window
+        if cmd == "records-search":
+            w.search.set_text(arg)
+            w._searched(w.search)  # now, not after SearchEntry's typing delay
+        else:
+            w.step(int(arg or "1"))
+        found = len(w._visible_sessions()) if w.query.strip() else None
+        r = {"ok": True, "query": w.query, "meetings": found, "shown": w.selected, "matches": len(w._matches),
+             "at": w.match_index + 1 if w._matches else 0, "line": w._current,
+             "bar": w.match_count.get_text() if w.match_bar.get_visible() else None}
+        Log.d("records search: \"%s\" %s meetings, shown %s matches=%d at=%s"
+              % (w.query, found, w.selected, len(w._matches), w._current or "-"))
+        return r
     if cmd == "rename":
         # `rename <id> <title>`; no title is 恢复自动标题.
         sid, _, title = arg.partition(" ")

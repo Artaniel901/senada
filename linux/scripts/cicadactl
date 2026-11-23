@@ -4,6 +4,7 @@
             target <code> | key-reload | windows | quit | dock [on|off] | close records
             calls <program=name,…>|none|real | realcalls | endtimes <silence> <countdown> <grace>|off | endkeep
             notes-tab notes|transcript | notes-search <text> | notes-wide on|off | onboarding-step <n> | settings-scroll <0-1>
+            records-search <text> | records-search-step 1|-1 (the records window's Ctrl+F search: meetings, matches, the line)
             codecs | play [<seconds>] | pause | rate | playstate | follow | play-line <n> | line-rect <n>|pill | settings-general (保存会议录音 and its player)
             fixes on|off | heard <text> | fix-state | fix-answer yes|no | fix-later | fix-revert <line> | fix-undo
             fix-edit <line>=<text>[|one][|keep0] | fix-editor <line>=<text> | vocab-add <word>=<heard>[|…] | vocab-state

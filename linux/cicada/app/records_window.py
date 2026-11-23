@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 from gi.repository import Gdk, Gio, GLib, Gtk, Pango
 
-from ..core import aac, roommic, session_store, speakers
+from ..core import aac, roommic, session_store, speakers, transcript_search
 from ..core.strings import L, LF
 from ..core.support import SOURCES, TARGETS, Log, clock
 from . import share_dialog, ui
@@ -40,6 +40,10 @@ class RecordsWindow(Gtk.Window):
         self.selected = None
         self.pending_delete = None  # a record deleted but still undoable
         self.query = ""
+        # The search in the shown record (#33: a search opens the line, not just the meeting): its terms
+        # (misheard names too), the lines found, which one is being looked at.
+        self.match_index = 0
+        self._terms, self._matches, self._match_set, self._current = [], [], set(), None
         self.mode = "both"  # transcript: "both" or "dst"
         self._both = False  # the shown meeting has lines I said (同声传译): rows name 你 / 对方
         self._nums, self._vnums, self._shown, self._speaker_key = {}, {}, {}, None  # 说话人识别 on show
@@ -94,6 +98,10 @@ class RecordsWindow(Gtk.Window):
         self.search = Gtk.SearchEntry()
         self.search.set_placeholder_text(L("搜索标题和对话"))
         self.search.connect("search-changed", self._searched)
+        # Enter goes to the next line found, as Ctrl+G does; Shift+Ctrl+G to the one before.
+        self.search.connect("activate", lambda *_: self.step(1))
+        self.search.connect("next-match", lambda *_: self.step(1))
+        self.search.connect("previous-match", lambda *_: self.step(-1))
         ui.classes(self.search, "search")
         # "Ctrl F" at the field's right end while it's empty, as the Mac shows ⌘F; the clear icon
         # takes its place once something is typed.
@@ -108,6 +116,7 @@ class RecordsWindow(Gtk.Window):
         self.search.connect("changed", lambda e: hint.set_visible(not e.get_text()))
         ui.pad(search_box, 2, 10, 8, 10)
         side.pack_start(search_box, False, False, 0)
+        side.pack_start(self._match_bar(), False, False, 0)
         left_scroll = Gtk.ScrolledWindow()
         left_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.list = Gtk.ListBox()
@@ -410,9 +419,10 @@ class RecordsWindow(Gtk.Window):
         for s in self.app.store.all():
             if s.id == self.pending_delete:
                 continue
-            if q and q not in session_store.display_title(s).lower() and not any(
-                    q in l.shown.lower() or q in (l.dst or "").lower() for l in s.lines):
-                continue
+            if q and q not in session_store.display_title(s).lower():
+                terms = transcript_search.terms(self.query, s.notes.terms if s.notes else [])
+                if not any(transcript_search.line_matches(l, terms) for l in s.lines):
+                    continue
             out.append(s)
         return out
 
@@ -473,16 +483,79 @@ class RecordsWindow(Gtk.Window):
         self.show_detail(empty=not everything, no_match=bool(everything) and not sessions)
 
     def _searched(self, entry) -> None:
+        if entry.get_text() == self.query:
+            return  # SearchEntry's delayed signal for text already searched: keep the line being looked at
         self.query = entry.get_text()
+        self.match_index = 0
         self.fill()
+        self._apply_search(scroll=True)
 
     def _row_selected(self, _list, row) -> None:
         if row is None or getattr(self, "_filling", False):
             return
         if row.session_id != self.selected:
             self.selected = row.session_id
+            self.match_index = 0
             self.show_detail()
             self.right.get_vadjustment().set_value(0)
+            if self.query.strip():
+                self._apply_search(scroll=True)
+
+    # The search in the shown record
+
+    def _match_bar(self) -> Gtk.Widget:
+        """Where the search is in the shown record: 本场 2 / 7, and a way to the previous and next line."""
+        self.match_count = ui.text("", 12, "secondary", wrap=False, ellipsize=False)
+        bar = ui.hbox(2)
+        bar.pack_start(self.match_count, True, True, 0)
+        bar.pack_end(ui.icon_button("go-down-symbolic", L("下一个"), lambda: self.step(1), px=13, focus=False), False, False, 0)
+        bar.pack_end(ui.icon_button("go-up-symbolic", L("上一个"), lambda: self.step(-1), px=13, focus=False), False, False, 0)
+        ui.pad(bar, 0, 14, 6, 10)
+        bar.show_all()
+        bar.set_no_show_all(True)
+        bar.hide()
+        self.match_bar = bar
+        return bar
+
+    def _fill_match_bar(self) -> None:
+        on = bool(self.query.strip()) and bool(self._matches)
+        if on:
+            ui.retext(self.match_count, LF("本场 %lld / %lld", self.match_index + 1, len(self._matches)))
+        self.match_bar.set_visible(on)
+
+    def _search_state(self, s) -> None:
+        """The search's terms and the lines it finds in `s` (none while there is no query or record)."""
+        self._terms = transcript_search.terms(self.query, s.notes.terms if s.notes else []) if s is not None else []
+        self._matches = transcript_search.matches(s.lines, self._terms) if s is not None else []
+        self._match_set = set(self._matches)
+        if self._matches:
+            self.match_index = min(self.match_index, len(self._matches) - 1)
+        self._current = self._matches[self.match_index] if self._matches else None
+        self._fill_match_bar()
+
+    def step(self, d: int) -> None:
+        n = len(self._matches)
+        if not n:
+            return
+        self.match_index = (min(self.match_index, n - 1) + d + n) % n
+        self._apply_search(scroll=True)
+
+    def _apply_search(self, scroll: bool) -> None:
+        """Marks the shown record's lines for the search; with `scroll`, goes to the line being looked at."""
+        s = self.app.store.get(self.selected) if self.selected else None
+        if s is None or self.columns is None or getattr(self, "_sid", None) != s.id:
+            self._search_state(None)
+            return
+        self._search_state(s)
+        self._refresh_rows(s)
+        if not scroll or self._current is None:
+            return
+        idx = next(i for i, l in enumerate(s.lines) if l.id == self._current)
+        self._more_rows_until(idx + 1)  # the batches may not have got that far yet
+        row = self._rows[idx][1]
+        # Once the rows just built are laid out, and again once a long page has its final height.
+        GLib.idle_add(lambda: self._centre(row) or False)
+        GLib.timeout_add(200, lambda: self._centre(row) or False)
 
     # Detail
 
@@ -707,11 +780,14 @@ class RecordsWindow(Gtk.Window):
                 d.pack_end(ui.pad(hint, 0, 18, 14, 0), False, False, 0)
             d.show_all()
             return
+        if empty or no_match:
+            self._search_state(None)
         if no_match:
             d.pack_start(self._status_page("system-search-symbolic", LF("没有找到“%@”", self.query.strip()), "", []), True, True, 0)
             d.show_all()
             return
         s = self.app.store.get(self.selected) if self.selected else None
+        self._search_state(s)
         if s is None:
             self._unload_player()
             ui.clear(d)
@@ -837,6 +913,7 @@ class RecordsWindow(Gtk.Window):
         ui.retext(self.pinned_title, session_store.display_title(s))
         ui.retext(self.meta_label, self._meta(s, live))
         self._fill_export_line(s, live)
+        self._search_state(s)
         state = self._notes_state(s, live)
         if state != self._notes_key:
             self._notes_key = state
@@ -848,6 +925,12 @@ class RecordsWindow(Gtk.Window):
             self.columns.reorder_child(new, 0)
             new.show_all()
         self._nums = speakers.numbers(s.lines) if self._vnums else {}
+        self._refresh_rows(s)
+        self._fill_fix_banner(s)
+        self._more_rows()
+
+    def _refresh_rows(self, s) -> None:
+        """Rebuilds the rows shown so far whose line, speaker label or search marks changed."""
         starts = self._starts(s.lines)
         for i, l in enumerate(s.lines[:len(self._rows)]):
             if self._rows[i][0] != self._row_key(l, l.id in starts):
@@ -859,8 +942,6 @@ class RecordsWindow(Gtk.Window):
                 self.transcript.reorder_child(row, i + 1)  # after the header
                 row.show_all()
                 self._rows[i] = (k, row)
-        self._fill_fix_banner(s)
-        self._more_rows()
 
     # The recording (保存会议录音)
 
@@ -1326,7 +1407,9 @@ class RecordsWindow(Gtk.Window):
 
     def _row_key(self, l, start):
         fixes = tuple((f.from_, f.to, f.ask, f.off, f.user) for f in l.fixes or [])
-        return (l.id, l.shown, l.dst, l.voice, start, fixes, self._editing == l.id)
+        # The search marks only lines it finds: typing a query doesn't rebuild the whole transcript.
+        found = (tuple(self._terms), l.id == self._current) if l.id in self._match_set else None
+        return (l.id, l.shown, l.dst, l.voice, start, fixes, self._editing == l.id, found)
 
     def _who(self, l):
         """The label at a change of speaker, and its colour class."""
@@ -1523,16 +1606,19 @@ class RecordsWindow(Gtk.Window):
                 label = ui.hbox(6, label, ui.place_tag(l))
             texts.pack_start(label, False, False, 0)
         translated = l.dst and l.dst != l.shown
+        terms = self._terms if l.id in self._match_set else []
+        found = l.id == self._current
         selectable = []  # the line's text: a drag over it selects, and must not play
         if self._editing == l.id:
             texts.pack_start(self._line_editor(l), False, False, 0)
         else:
             if translated:
-                dst = ui.text(l.dst, 13, "ink", selectable=True, width_chars=46, lang=l.dstLang)
+                dst = ui.marked(l.dst, terms, 13, "ink", found, lang=l.dstLang, width_chars=46)
+                dst.set_selectable(True)
                 selectable.append(dst)
                 texts.pack_start(dst, False, False, 0)
             if not translated or self.mode == "both":
-                src = ui.fixed(l, 12 if translated else 13, "tertiary" if translated else "ink")
+                src = ui.fixed(l, 12 if translated else 13, "tertiary" if translated else "ink", terms, found)
                 src.set_selectable(True)
                 src.set_max_width_chars(46)
                 selectable.append(src)

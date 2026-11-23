@@ -543,26 +543,14 @@ def retext(l: Gtk.Label, s: str) -> None:
     l.set_markup('<span size="%d" lang="%s"%s>%s</span>' % (round(size * 768), lang, ' weight="bold"' if bold else "", esc(s)))
 
 
-def marked(s: str, terms: list, size: int = 13, cls: str = "ink", current: bool = False, lang: str | None = None) -> Gtk.Label:
+def marked(s: str, terms: list, size: int = 13, cls: str = "ink", current: bool = False, lang: str | None = None,
+           width_chars: int = 40) -> Gtk.Label:
     """text() with every search term highlighted in place (the current match in the accent)."""
-    l = text(s, size, cls, lang=lang)
-    low = s.lower()
-    spans = []
-    for t in terms:
-        t = t.lower()
-        i = low.find(t) if t else -1
-        while i >= 0:
-            spans.append((i, i + len(t)))
-            i = low.find(t, i + len(t))
-    if not spans:
+    from ..core.transcript_search import spans
+    l = text(s, size, cls, lang=lang, width_chars=width_chars)
+    merged = spans(s, terms)
+    if not merged:
         return l
-    spans.sort()
-    merged = []
-    for a, b in spans:
-        if merged and a <= merged[-1][1]:
-            merged[-1] = (merged[-1][0], max(b, merged[-1][1]))
-        else:
-            merged.append((a, b))
     mark = ' background="#E8552B" foreground="#FFFFFF"' if current else ' background="#FBE0D5"'
     out, at = [], 0
     for a, b in merged:
@@ -575,13 +563,14 @@ def marked(s: str, terms: list, size: int = 13, cls: str = "ink", current: bool 
     return l
 
 
-def fixed(line, size: int = 13, cls: str = "ink", terms: list = (), current: bool = False, lang: str | None = None) -> Gtk.Label:
+def fixed(line, size: int = 13, cls: str = "ink", terms: list = (), current: bool = False, lang: str | None = None,
+          width_chars: int = 40) -> Gtk.Label:
     """A line as shown (改正听错的词): each fixed word underlined in grey (the Mac's dotted underline;
     Pango has no dotted one), a word waiting for the user on a pale wash. While searching, the search
     marks instead."""
     from ..core.correction import apply
     if terms or not line.fixes:
-        return marked(line.shown, list(terms), size, cls, current, lang=lang or line.srcLang)
+        return marked(line.shown, list(terms), size, cls, current, lang=lang or line.srcLang, width_chars=width_chars)
     s, marks = apply(line.fixes, line.src)
     asks = []
     for f in line.fixes:
@@ -599,7 +588,7 @@ def fixed(line, size: int = 13, cls: str = "ink", terms: list = (), current: boo
         out.append("<span%s>%s</span>" % (attr, esc(s[a:b])))
         at = b
     out.append(esc(s[at:]))
-    l = text(s, size, cls, lang=lang or line.srcLang)
+    l = text(s, size, cls, lang=lang or line.srcLang, width_chars=width_chars)
     size_, lang_, bold = l.cicada_format
     l.set_markup('<span size="%d" lang="%s"%s>%s</span>' % (round(size_ * 768), lang_, ' weight="bold"' if bold else "", "".join(out)))
     return l
