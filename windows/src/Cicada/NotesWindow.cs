@@ -619,7 +619,8 @@ sealed class NotesWindow : Window
     /// heard as with 改回 (`revert`), and 改这句… (`edit`, the meeting record). `editor` takes the
     /// original's place while the line is being rewritten.
     internal static FrameworkElement TranscriptRow(TranscriptLine l, string? who = null, Brush? ink = null, bool place = false, Action<double>? play = null,
-        Action<LineFix>? revert = null, bool open = false, Action? edit = null, FrameworkElement? editor = null)
+        Action<LineFix>? revert = null, bool open = false, Action? edit = null, FrameworkElement? editor = null,
+        IReadOnlyList<string>? terms = null, bool found = false)
     {
         var text = new StackPanel { Margin = new Thickness(0, who is null && !place ? 0 : 6, 0, 12), Background = Brushes.Transparent };
         var time = Ui.Text(Languages.Clock(l.T), 12, play is null ? Palette.Tertiary : Palette.TimeLink, wrap: false);
@@ -644,8 +645,10 @@ sealed class NotesWindow : Window
             text.Children.Add(Gap(editor, 3, top: true));
             return text;
         }
-        text.Children.Add(Gap(FixViews.LineText(l, translated ? 13 : 15, translated ? Palette.Secondary : Palette.Ink), 3, top: true));
-        if (translated) text.Children.Add(Gap(Ui.Text(l.Dst!, 15, Palette.Ink), 2, top: true));
+        // `terms`: the records' search marks what it found (`found`: the match being looked at).
+        terms ??= [];
+        text.Children.Add(Gap(FixViews.Mark(FixViews.LineText(l, translated ? 13 : 15, translated ? Palette.Secondary : Palette.Ink), terms, found), 3, top: true));
+        if (translated) text.Children.Add(Gap(FixViews.Mark(Ui.Text(l.Dst!, 15, Palette.Ink), terms, found), 2, top: true));
         var hasFixes = revert is not null && (l.Fixes ?? []).Any(f => f.Applied);
         if (hasFixes || edit is not null)
         {

@@ -79,7 +79,7 @@ sealed class MainWindow : Window
         var glass = Ui.Icon(Icons.Search, 16, Palette.Secondary);
         glass.HorizontalAlignment = HorizontalAlignment.Left; glass.Margin = new Thickness(10, 0, 0, 0); glass.IsHitTestVisible = false;
         System.Windows.Automation.AutomationProperties.SetName(search, L("搜索标题、纪要和原话"));
-        search.TextChanged += (_, _) => { placeholder.Visibility = search.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed; Fill(); };
+        search.TextChanged += (_, _) => { placeholder.Visibility = search.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed; searchMoved = true; Fill(); };
         Ui.StyleField(search);
         search.Margin = new Thickness(22, 0, 0, 0);
         placeholder.Margin = new Thickness(22, 0, 0, 0);
@@ -97,7 +97,26 @@ sealed class MainWindow : Window
         {
             if (e.Key == System.Windows.Input.Key.F && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Control) { search.Focus(); search.SelectAll(); e.Handled = true; }
             else if (e.Key == System.Windows.Input.Key.Escape && search.IsKeyboardFocused) { search.Text = ""; e.Handled = true; }
+            // Enter goes to the next line found in the shown meeting (Shift+Enter: the one before).
+            else if (e.Key == System.Windows.Input.Key.Enter && search.IsKeyboardFocused)
+            {
+                Step(System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Shift ? -1 : 1);
+                e.Handled = true;
+            }
         };
+        // 本场 n / N under the search box, only while the shown meeting has lines found.
+        matchText.VerticalAlignment = VerticalAlignment.Center;
+        matchText.Typography.NumeralAlignment = FontNumeralAlignment.Tabular;
+        var prev = Ui.IconButton(Icons.ChevronUp, L("上一个"), () => Step(-1), Palette.Secondary, 26, 14);
+        var next = Ui.IconButton(Icons.Chevron, L("下一个"), () => Step(1), Palette.Secondary, 26, 14);
+        prev.Focusable = false; next.Focusable = false;
+        var steps = Ui.Row(0, prev, next);
+        DockPanel.SetDock(steps, Dock.Right);
+        matchBar.Children.Add(steps);
+        matchBar.Children.Add(matchText);
+        matchBar.Margin = new Thickness(22, -4, 14, 6);
+        matchBar.Visibility = Visibility.Collapsed;
+        DockPanel.SetDock(matchBar, Dock.Top);
 
         // The list pane on the ground's grey, the logo where the title bar was.
         var logo = AppIcon.Small(20);
@@ -108,6 +127,7 @@ sealed class MainWindow : Window
         DockPanel.SetDock(searchBox, Dock.Top);
         left.Children.Add(logo);
         left.Children.Add(searchBox);
+        left.Children.Add(matchBar);
         left.Children.Add(new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Padding = new Thickness(10, 0, 10, 12) });
 
         var right = new Border { Background = Palette.Surface, Child = detail };
@@ -135,11 +155,63 @@ sealed class MainWindow : Window
         Dispatcher.BeginInvoke(() => { refreshQueued = false; Fill(); });
     }
 
-    static bool Matches(Session s, string q) =>
-        q.Length == 0
-        || SessionStore.DisplayTitle(s).Contains(q, StringComparison.OrdinalIgnoreCase)
-        || (s.Notes?.Summary.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
-        || s.Lines.Any(l => l.Shown.Contains(q, StringComparison.OrdinalIgnoreCase) || (l.Dst?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false));
+    static bool Matches(Session s, string q)
+    {
+        if (q.Length == 0) return true;
+        if (SessionStore.DisplayTitle(s).Contains(q, StringComparison.OrdinalIgnoreCase) || (s.Notes?.Summary.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)) return true;
+        var terms = TranscriptSearch.Terms(q, s.Notes?.Terms);
+        return s.Lines.Any(l => TranscriptSearch.Matches(l, terms));
+    }
+
+    // MARK: Searching inside the shown meeting (#33: a search opens the line, not just the meeting)
+
+    readonly DockPanel matchBar = new();
+    readonly TextBlock matchText = Ui.Text("", 12, Palette.Secondary, wrap: false);
+    /// Which of the shown meeting's lines found the search is on.
+    int matchIndex;
+    /// The query changed or another meeting was opened: start again at the first line found.
+    bool searchMoved;
+
+    List<string> SearchTerms(Session? s) => s is null ? [] : TranscriptSearch.Terms(search.Text, s.Notes?.Terms);
+    List<string> Found(Session? s) => s is null ? [] : TranscriptSearch.Matches(s.Lines, SearchTerms(s));
+    string? CurrentMatch(Session? s) { var f = Found(s); return f.Count == 0 ? null : f[Math.Min(matchIndex, f.Count - 1)]; }
+    Session? Shown => selected is null ? null : app.Store.Get(selected);
+
+    /// A search that finds lines in the shown meeting opens its transcript at the first one.
+    void ShowMatches()
+    {
+        searchMoved = false;
+        matchIndex = 0;
+        if (Found(Shown).Count > 0) tab = "transcript";
+    }
+
+    void Step(int d)
+    {
+        var n = Found(Shown).Count;
+        if (n == 0) return;
+        matchIndex = (Math.Min(matchIndex, n - 1) + d + n) % n;
+        tab = "transcript";
+        UpdateMatchBar();
+        ShowDetail();
+    }
+
+    void UpdateMatchBar()
+    {
+        var n = search.Text.Trim().Length == 0 ? 0 : Found(Shown).Count;
+        matchBar.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (n > 0) matchText.Text = LF("本场 %lld / %lld", Math.Min(matchIndex, n - 1) + 1, n);
+    }
+
+    /// Debug `search <text>` / `searchstep <1|-1>`: types into the search box or steps, as Enter does.
+    public System.Text.Json.Nodes.JsonObject DebugSearch(string? text, int step)
+    {
+        if (text is not null) search.Text = text; else Step(step);
+        var meetings = app.Store.All().Count(s => Matches(s, search.Text.Trim()));
+        var found = Found(Shown);
+        var at = CurrentMatch(Shown);
+        Log.Debug($"main search: \"{search.Text}\" {meetings} meetings, shown {selected ?? "-"} tab={tab} matches={found.Count} at={at ?? "-"}");
+        return new() { ["query"] = search.Text, ["meetings"] = meetings, ["shown"] = selected, ["tab"] = tab, ["matches"] = found.Count, ["index"] = found.Count == 0 ? 0 : Math.Min(matchIndex, found.Count - 1) + 1, ["at"] = at };
+    }
 
     void Fill()
     {
@@ -165,9 +237,11 @@ sealed class MainWindow : Window
             list.Children.Add(Item(s));
         }
         // An empty page replaces the meeting, so the next real one must draw again.
-        if (all.Count == 0) { selected = null; shownKey = null; detail.Content = Welcome(); return; }
-        if (shown.Count == 0) { shownKey = null; detail.Content = Empty(L("没有找到"), ""); return; }
-        if (selected is null || shown.All(s => s.Id != selected)) selected = shown[0].Id;
+        if (all.Count == 0) { selected = null; shownKey = null; detail.Content = Welcome(); UpdateMatchBar(); return; }
+        if (shown.Count == 0) { shownKey = null; detail.Content = Empty(L("没有找到"), ""); matchBar.Visibility = Visibility.Collapsed; return; }
+        if (selected is null || shown.All(s => s.Id != selected)) { selected = shown[0].Id; if (q.Length > 0) searchMoved = true; }
+        if (searchMoved) ShowMatches();
+        UpdateMatchBar();
         foreach (var child in list.Children.OfType<Button>()) Paint(child);
         // Store changes come in a burst while a meeting runs; redraw the open page only if it changed.
         if (PageKey() == shownKey) { ShowToast(); return; }
@@ -185,7 +259,14 @@ sealed class MainWindow : Window
             ToolTip = Records.Meta(s, app),
         };
         b.Template = RowTemplate();
-        b.Click += (_, _) => { selected = s.Id; tab = "notes"; foreach (var child in list.Children.OfType<Button>()) Paint(child); ShowDetail(); };
+        b.Click += (_, _) =>
+        {
+            selected = s.Id; tab = "notes";
+            if (search.Text.Trim().Length > 0) ShowMatches();
+            UpdateMatchBar();
+            foreach (var child in list.Children.OfType<Button>()) Paint(child);
+            ShowDetail();
+        };
         System.Windows.Automation.AutomationProperties.SetName(b, SessionStore.DisplayTitle(s));
         return b;
     }
@@ -391,7 +472,7 @@ sealed class MainWindow : Window
 
     /// What the open page shows; a store change that leaves it the same doesn't redraw it.
     string? PageKey() => selected is not null && app.Store.Get(selected) is { } cur
-        ? $"{selected}|{tab}|{SessionStore.DisplayTitle(cur)}|{cur.Lines.Count}|{cur.Notes?.Covered}|{cur.Notes?.Final}|{app.Listen.Listening}|{app.Notes.GeneratingId == selected}|{cur.HasAudio}|{Recording.Playable(cur)}|{app.Settings.RecordAudio}|{FixKey(cur)}|{cur.Lines.Sum(l => l.Dst?.Length ?? 0)}|{FolderExportUi.Key(app, selected)}"
+        ? $"{selected}|{tab}|{SessionStore.DisplayTitle(cur)}|{cur.Lines.Count}|{cur.Notes?.Covered}|{cur.Notes?.Final}|{app.Listen.Listening}|{app.Notes.GeneratingId == selected}|{cur.HasAudio}|{Recording.Playable(cur)}|{app.Settings.RecordAudio}|{FixKey(cur)}|{cur.Lines.Sum(l => l.Dst?.Length ?? 0)}|{FolderExportUi.Key(app, selected)}|{search.Text.Trim()}|{matchIndex}"
         : null;
 
     void ShowDetail()
@@ -687,13 +768,17 @@ sealed class MainWindow : Window
         // The line nearest the topic's time (older notes may hold a time no line has), or the one asked for.
         var nearest = jumpLine is { } jl ? s.Lines.FirstOrDefault(l => l.Id == jl)
             : jumpTo is { } t0 && s.Lines.Count > 0 ? s.Lines.MinBy(l => Math.Abs(l.T - t0)) : null;
+        // The search's terms and the line found being looked at, which the page opens on (centred).
+        var terms = SearchTerms(s);
+        var found = CurrentMatch(s);
+        PlayRow? foundRow = null;
         // Opened at a line while the recording plays: stay there (回到正在播放 goes back).
-        if (nearest is not null && playing) following = false;
+        if ((nearest is not null || found is not null) && playing) following = false;
         foreach (var (l, who, ink, place) in NotesWindow.Speakers(s.Lines, app.Settings.SpeakerVoices))
         {
             var editor = editingLine == l.Id ? new FixViews.Editor(l, s.Id, app.Fixes, editingStart, EditDone) : null;
             var line = NotesWindow.TranscriptRow(l, who, ink, place, play, revert: f => app.Fixes.Revert(f, l.Id, s.Id),
-                edit: () => EditLine(l, l.Shown), editor: editor);
+                edit: () => EditLine(l, l.Shown), editor: editor, terms: terms, found: l.Id == found);
             var menu = new ContextMenu { FontFamily = Palette.Font };
             var item = new MenuItem { Header = L("改这句…") };
             item.Click += (_, _) => EditLine(l, l.Shown);
@@ -701,7 +786,17 @@ sealed class MainWindow : Window
             line.ContextMenu = menu;
             var r = Row(l, (Panel)line, play is not null && editor is null);
             if (ReferenceEquals(l, nearest)) target = r;
+            if (l.Id == found) foundRow = r;
             body.Children.Add(r.Card);
+        }
+        if (target is null && foundRow is { Card: var foundCard })
+        {
+            // Measured once laid out, as below.
+            pendingJump = scroll =>
+            {
+                void Jump(object? _, RoutedEventArgs __) { foundCard.Loaded -= Jump; Center(foundCard); }
+                foundCard.Loaded += Jump;
+            };
         }
         if (target is { } marked)
         {

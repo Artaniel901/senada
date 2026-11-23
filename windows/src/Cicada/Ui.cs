@@ -89,6 +89,7 @@ static class Icons
     public const string Folder = "M2.5,5.5 H7.5 L9,7.5 H17.5 V16 H2.5 Z";
     public const string Keyboard = "M4,5.5 H16 A1.5,1.5 0 0 1 17.5,7 V13 A1.5,1.5 0 0 1 16,14.5 H4 A1.5,1.5 0 0 1 2.5,13 V7 A1.5,1.5 0 0 1 4,5.5 Z M5.5,8.5 H6.5 M8.5,8.5 H9.5 M11.5,8.5 H12.5 M6.5,11.5 H13.5";
     public const string Chevron = "M6,8 L10,12 L14,8";
+    public const string ChevronUp = "M6,12 L10,8 L14,12";
     public const string Check = "M4.5,10.5 L8,14 L15.5,6";
     public const string Info = "M17,10 A7,7 0 1 1 3,10 A7,7 0 1 1 17,10 Z M10,9 V14 M10,6.5 V7";
     public const string Warning = "M10,3 L17.5,16 H2.5 Z M10,8 V11.5 M10,13.8 V14";

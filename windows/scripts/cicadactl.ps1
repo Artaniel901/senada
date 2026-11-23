@@ -7,6 +7,7 @@
 #   分享…: share "<id>[,full][,pw]" | unshare <id> | sharesheet "<id>[,full][,pw][,names][,30|365][,go]" | sharesheet leaveout | sharesheet | shareinfo <id>
 #     (quote anything with a comma: PowerShell would make it a list)
 #   存到文件夹: export [state] | export on | off | folder C:\Notes\Cicada | choose (the 存到哪里 dialog) | all (也存一份) | retry   (state › export too); rename <id> <title>
+#   会议记录搜索 (Ctrl+F): search <text> | searchstep 1|-1   (meetings found, lines found in the shown one, the line it is on)
 param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Command)
 $pipe = New-Object System.IO.Pipes.NamedPipeClientStream(".", "cicada-dev", [System.IO.Pipes.PipeDirection]::InOut)
 $pipe.Connect(3000)

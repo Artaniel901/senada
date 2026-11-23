@@ -1119,6 +1119,11 @@ sealed class Controller
     /// Debug pipe: a record opened at a tab, and the player in it.
     public void OpenRecord(string id, string tab) { ShowRecords(id); mainWindow?.Select(id, tab); }
     public void Play(string arg) => mainWindow?.DebugPlay(arg);
+    public JsonObject DebugSearch(string? text, int step)
+    {
+        if (mainWindow is null) ShowRecords();
+        return mainWindow!.DebugSearch(text, step);
+    }
 
     /// 分享…: the dialog over the records window (or the screen's centre without it).
     public ShareDialog ShareSheet(Session s)
@@ -1653,6 +1658,10 @@ static class DebugServer
             case "rename": { var p = arg.Split(' ', 2); app.Store.Rename(p[0], p.Length > 1 ? p[1] : ""); break; }  // rename <id> <title> ("" back to automatic)
             case "open": { var p = arg.Split(' '); app.OpenRecord(p[0], p.Length > 1 ? p[1] : "notes"); break; }
             case "play": app.Play(arg); break;
+            // The records' Ctrl+F (#33): "search <text>" types into it (opens the records), "searchstep 1|-1" is
+            // Enter / the arrows. Logged as "main search:" with the meetings found, the lines found and where it is.
+            case "search": return app.DebugSearch(arg, 0);
+            case "searchstep": return app.DebugSearch(null, int.TryParse(arg, out var searchStep) ? searchStep : 1);
             // 存到文件夹: export [state] | on | off | folder <path> | choose | all | retry
             case "export":
             {

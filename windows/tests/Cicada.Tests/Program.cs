@@ -3956,4 +3956,35 @@ static class Tests
         Equal("f13", s.TalkKey, "kept in settings");
         Equal("rcontrol", Json.Read<AppSettings>("{}")!.TalkKey, "settings from before it are right Ctrl");
     }
+
+    // MARK: searching the records (#33, the Mac's TranscriptSearchTests)
+
+    public static void SearchANameAlsoFindsHowItWasMisheard()
+    {
+        var notes = new List<NoteTerm> { new() { Name = "江充", Heard = ["江松"] }, new() { Name = "Ling" } };
+        Equal("江充,江松", string.Join(",", TranscriptSearch.Terms("江充", notes)), "the name and how it was heard");
+        // Searching the misheard form finds the right one too; an unrelated term stays out.
+        Equal("江松,江充", string.Join(",", TranscriptSearch.Terms(" 江松 ", notes)), "the misheard form finds the name");
+        Equal(0, TranscriptSearch.Terms("  ", notes).Count, "a blank query finds nothing");
+    }
+
+    public static void SearchMatchesLookInBothLanguagesInOrder()
+    {
+        static TranscriptLine Line(string id, string src, string? dst = null) => new() { Id = id, Src = src, Dst = dst, SrcLang = "zh-CN", DstLang = "en" };
+        var lines = new[] { Line("a", "我们看一下预算"), Line("b", "下周再说", "the budget next week"), Line("c", "好的") };
+        Equal("a", string.Join(",", TranscriptSearch.Matches(lines, ["预算"])), "the original");
+        Equal("b", string.Join(",", TranscriptSearch.Matches(lines, ["BUDGET"])), "the translation, any case");
+        Equal("a,b", string.Join(",", TranscriptSearch.Matches(lines, ["预算", "budget"])), "every term, in line order");
+        Equal(0, TranscriptSearch.Matches(lines, []).Count, "no terms, no matches");
+        // A fixed word is searched as shown, not as heard.
+        var fixedLine = new TranscriptLine { Id = "f", Src = "莫拉的方案", Fixes = [new LineFix("莫拉", "Morpho")] };
+        Equal("f", string.Join(",", TranscriptSearch.Matches([fixedLine], ["morpho"])), "the shown text");
+    }
+
+    public static void SearchMarksEveryOccurrence()
+    {
+        Equal("0+6,8+6", string.Join(",", TranscriptSearch.Spans("Budget, budget, done", ["budget"]).Select(s => $"{s.Start}+{s.Length}")), "both, any case");
+        Equal("0+4", string.Join(",", TranscriptSearch.Spans("江充江松说", ["江充", "江松"]).Select(s => $"{s.Start}+{s.Length}")), "touching terms merge");
+        Equal(0, TranscriptSearch.Spans("nothing here", ["budget"]).Count, "nothing to mark");
+    }
 }

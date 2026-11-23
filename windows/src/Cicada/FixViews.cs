@@ -50,6 +50,43 @@ static class FixViews
         return t;
     }
 
+    /// The records' search (#33, TranscriptSearch.highlighted on the Mac): every term in `t` on the
+    /// pale accent; in the match being looked at, solid accent with white text. The runs are split
+    /// where a mark starts or ends, keeping their own look (a fixed word's underline) otherwise.
+    public static T Mark<T>(T t, IReadOnlyList<string> terms, bool current) where T : TextBlock
+    {
+        if (terms.Count == 0) return t;
+        var runs = t.Inlines.OfType<Run>().ToList();
+        if (runs.Count == 0 || runs.Count != t.Inlines.Count) return t;
+        var text = string.Concat(runs.Select(r => r.Text));
+        var spans = TranscriptSearch.Spans(text, terms);
+        if (spans.Count == 0) return t;
+        var marked = new bool[text.Length];
+        foreach (var (start, length) in spans) for (int i = start; i < start + length; i++) marked[i] = true;
+        t.Inlines.Clear();
+        int at = 0;
+        foreach (var r in runs)
+        {
+            int end = at + r.Text.Length;
+            for (int from = at; from < end;)
+            {
+                int to = from + 1;
+                while (to < end && marked[to] == marked[from]) to++;
+                var piece = new Run(text[from..to]) { TextDecorations = r.TextDecorations, Background = r.Background };
+                if (r.ReadLocalValue(TextElement.ForegroundProperty) != DependencyProperty.UnsetValue) piece.Foreground = r.Foreground;
+                if (marked[from])
+                {
+                    piece.Background = current ? Palette.Live : Palette.AccentPale;
+                    piece.Foreground = current ? Brushes.White : Palette.AccentText;
+                }
+                t.Inlines.Add(piece);
+                from = to;
+            }
+            at = end;
+        }
+        return t;
+    }
+
     /// Under a paragraph: each fixed word, what it was heard as, and 改回. `edit`: 改这句… after them
     /// (the meeting record).
     public static FrameworkElement FixedWords(TranscriptLine l, Action<LineFix> revert, Action? edit = null)
