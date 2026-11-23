@@ -351,10 +351,6 @@ final class FileImporter: ObservableObject {
 
     private func language(of pcm: URL) async -> Lang {
         if let fixed = sourceLanguages.first(where: { $0.locale == settings.importLanguage }) { return fixed }
-        #if CICADA_IOS
-        // iOS always names the language (对方说); LanguageDetector is the Mac's.
-        return sourceLanguages[0]
-        #else
         let langs = await Self.installed()
         guard langs.count > 1 else { return langs.first ?? sourceLanguages[0] }
         phase = .detecting
@@ -373,7 +369,6 @@ final class FileImporter: ObservableObject {
         debugLog("import: language scores \(scores.map { String(format: "%@=%.2f", $0.key, $0.value) }.sorted())")
         let best = scores.max { $0.value < $1.value }?.key
         return langs.first { $0.locale == best } ?? langs[0]
-        #endif
     }
 
     /// With no long pause the recognizer hands back minutes as one result (a speech, a fluent

@@ -10,10 +10,11 @@ import UniformTypeIdentifiers
 // records the system keeps the app running behind other apps (BGContinuedProcessingTask) and shows
 // its progress.
 
-/// 对方说 and 翻译成 as the iOS app has them: an import is in the language the user listens to.
+/// 对方说 and 翻译成 as the iOS app has them: an import is in the language the user listens to
+/// (自动识别: FileImporter hears it).
 @MainActor
 final class ImportPrefs: ImportSettings {
-    var importLanguage: String { Pref.sourceLang.locale }
+    var importLanguage: String { Pref.sourceAuto ? "auto" : Pref.sourceLang.locale }
     var speakerVoices: Bool { UserDefaults.standard.bool(forKey: Pref.voices) }
     func resolvedTarget(source: String?) -> String { Pref.target(for: source ?? Pref.sourceLang.code) }
 }

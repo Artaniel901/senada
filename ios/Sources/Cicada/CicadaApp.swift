@@ -53,17 +53,27 @@ enum Pref {
     static let silenceMinutes = "silenceMinutes"
     static var speakerMode: Bool { UserDefaults.standard.string(forKey: hear) == "speaker" }
 
-    /// 对方说 on iOS: one language the user picks (detecting it comes later); the Mac's "auto" reads as English.
+    /// 对方说 is 自动识别: listening and imports hear which language it is (LanguageDetector).
+    static var sourceAuto: Bool { (UserDefaults.standard.string(forKey: source) ?? "auto") == "auto" }
+
+    /// 对方说 as one language: the one picked, or with 自动识别 the one heard last (the Mac's
+    /// lastDetected), else the likeliest for this phone. Face to face and model downloads use it.
     static var sourceLang: Lang {
-        let v = UserDefaults.standard.string(forKey: source) ?? "en-US"
-        return sourceLanguages.first { $0.locale == v } ?? sourceLanguages[0]
+        let v = UserDefaults.standard.string(forKey: source) ?? "auto"
+        if let lang = sourceLanguages.first(where: { $0.locale == v }) { return lang }
+        let last = UserDefaults.standard.string(forKey: lastDetected)
+        return likelySourceLanguages(last: last, systemLanguages: Locale.preferredLanguages).first ?? sourceLanguages[0]
     }
+    /// The language 自动识别 heard last, as the Mac keeps it.
+    static let lastDetected = "lastDetected"
 
     /// 对方说 in the UI's language ("英语", "English"), as the Mac's menu shows it.
     static func name(of lang: Lang) -> String {
         Locale.current.localizedString(forLanguageCode: lang.code) ?? lang.name
     }
-    static var sourceName: String { name(of: sourceLang) }
+    /// 对方说's code for 翻译成: with 自动识别, none yet (跟随系统 is my language until one is heard).
+    static var sourceCode: String { sourceAuto ? "auto" : sourceLang.code }
+    static var sourceName: String { sourceAuto ? L("自动识别") : name(of: sourceLang) }
 
     /// "英 → 中" for two translation codes, as a meeting row says it.
     static func pairText(_ source: String, _ target: String) -> String {
@@ -212,7 +222,7 @@ final class AppModel: ObservableObject {
     @Published var devWindow: CGSize?
 
     init() {
-        UserDefaults.standard.register(defaults: [Pref.source: "en-US", Pref.voices: true, Pref.model: LingClient.models[0], Pref.notesLanguage: "mine",
+        UserDefaults.standard.register(defaults: [Pref.source: "auto", Pref.voices: true, Pref.model: LingClient.models[0], Pref.notesLanguage: "mine",
                                                   Pref.fixMisheard: true, Pref.askNames: true, Pref.recordAudio: true,
                                                   Pref.silenceEnd: "prompt", Pref.silenceMinutes: 10.0])
         TranscriptExport.voices = UserDefaults.standard.bool(forKey: Pref.voices)
@@ -248,7 +258,7 @@ final class AppModel: ObservableObject {
         // 纪要 first, as the Mac's notes window; without a key there are none, so 字幕.
         livePage = ling.hasKey ? .notes : .subtitles
         fixes.meetingStarted()
-        room.start(source: Pref.sourceLang.locale, target: Pref.target(for: Pref.sourceLang.code), voices: UserDefaults.standard.bool(forKey: Pref.voices),
+        room.start(source: Pref.sourceAuto ? "auto" : Pref.sourceLang.locale, target: Pref.target(for: Pref.sourceCode), voices: UserDefaults.standard.bool(forKey: Pref.voices),
                    speaker: Pref.speakerMode)
     }
 

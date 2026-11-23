@@ -59,7 +59,7 @@ struct LiveDot: View {
 struct ListenBar: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var room: RoomListen
-    @AppStorage(Pref.source) private var source = "en-US"
+    @AppStorage(Pref.source) private var source = "auto"
     @AppStorage(Pref.target) private var target = "system"
     @AppStorage(Pref.hear) private var hear = "room"
     /// Glass on the ground (iPhone); white on the iPad's glass sidebar.
@@ -94,6 +94,7 @@ struct ListenBar: View {
                     Text(hear == "speaker" ? L("别戴耳机，字幕会浮在小窗里") : L("听不到其他 app 的声音，线上会议请用电脑版"))
                 }
                 Picker(selection: $source) {
+                    Text("自动识别").tag("auto")
                     ForEach(sourceLanguages, id: \.locale) { Text(Pref.name(of: $0)).tag($0.locale) }
                 } label: { Text("对方说") }
                 Picker(selection: $target) {
@@ -101,7 +102,7 @@ struct ListenBar: View {
                     ForEach(targetLanguages, id: \.code) { Text($0.name).tag($0.code) }
                 } label: { Text("翻译成") }
             } label: {
-                Text(verbatim: (hear == "speaker" ? L("外放") + " · " : "") + "\(Pref.sourceName) → \(targetName(Pref.target(for: Pref.sourceLang.code)))")
+                Text(verbatim: (hear == "speaker" ? L("外放") + " · " : "") + "\(Pref.sourceName) → \(targetName(Pref.target(for: Pref.sourceCode)))")
                     .font(.subheadline).foregroundStyle(Ink.secondary).lineLimit(1).minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(minHeight: 44)

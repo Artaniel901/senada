@@ -1,8 +1,4 @@
-import AppKit
 import AVFoundation
-import AudioToolbox
-import CoreAudio
-import CoreMedia
 
 // MARK: - Spoken language detection
 

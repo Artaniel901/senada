@@ -92,7 +92,8 @@ final class FaceToFace: ObservableObject {
         mine = m
         theirs = t
         UserDefaults.standard.set(m.locale, forKey: Pref.myLang)
-        UserDefaults.standard.set(t.locale, forKey: Pref.source)
+        // With 自动识别 for listening it stays on: their language is the one heard last.
+        UserDefaults.standard.set(t.locale, forKey: Pref.sourceAuto ? Pref.lastDetected : Pref.source)
     }
 
     // MARK: The screen
