@@ -23,6 +23,7 @@ import cicada.Strings.LF
 import cicada.SpeakerLabels
 import cicada.Strings
 import cicada.TranscriptExport
+import cicada.TranscriptSearch
 
 /// 会议记录: every meeting, newest first, grouped by day; search covers titles, notes and what
 /// was said; chips narrow to meetings with notes or to-dos.
@@ -70,10 +71,26 @@ class RecordsActivity : Activity() {
         setContentView(ui.screen(this, null, back = true, ground = Palette.ground, body = body))
         // Opened from the floating search button: straight to typing.
         if (savedInstanceState == null) { search.requestFocus(); window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE) }
+        // Debug `search <text>`: typed in, as a person would.
+        if (savedInstanceState == null) intent.getStringExtra("query")?.let { search.setText(it) }
     }
 
-    override fun onResume() { super.onResume(); unobserve = cicada.observe(::render); shown = null; render() }
-    override fun onPause() { super.onPause(); unobserve?.invoke(); unobserve = null }
+    override fun onResume() { super.onResume(); current = this; unobserve = cicada.observe(::render); shown = null; render() }
+    override fun onPause() { super.onPause(); if (current === this) current = null; unobserve?.invoke(); unobserve = null }
+
+    /// For `cicadactl search`: the meetings the search finds (ids), and opening one as a tap does.
+    fun debugFound(): List<String> = cicada.store.all().filter(::matches).map { it.id }
+    fun debugOpen(index: Int): String? {
+        val id = debugFound().getOrNull(index) ?: return null
+        val s = cicada.store.get(id) ?: return null
+        MainActivity.recordRow(this, ui, s, cicada.listen.listening && cicada.listen.sessionId == id, query).performClick()
+        return id
+    }
+
+    companion object {
+        /// 会议记录 in front, for the debug commands.
+        var current: RecordsActivity? = null; private set
+    }
     // The search text is kept by the field itself (it has an id); the filter by us.
     override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); out.putString("filter", filter) }
 
@@ -82,9 +99,11 @@ class RecordsActivity : Activity() {
         if (filter == "todo" && (s.notes?.todos?.isEmpty() != false)) return false
         if (query.isEmpty()) return true
         val q = query.lowercase()
+        // What was said is searched as the record will mark it: misheard names too (TranscriptSearch).
+        val terms = TranscriptSearch.terms(query, s.notes?.terms.orEmpty())
         return SessionStore.displayTitle(s).lowercase().contains(q) ||
             s.notes?.let { n -> (n.summary + n.topics.joinToString { it.title + it.points.joinToString() } + n.terms.joinToString { it.name }).lowercase().contains(q) } == true ||
-            s.lines.any { it.shown.lowercase().contains(q) || it.dst?.lowercase()?.contains(q) == true }
+            s.lines.any { TranscriptSearch.matches(it, terms) }
     }
 
     private fun render() {
@@ -108,7 +127,7 @@ class RecordsActivity : Activity() {
         for (s in sessions) days.getOrPut(MainActivity.day(s.startedAt)) { mutableListOf() }.add(s)
         for ((day, items) in days) {
             column.addView(ui.sectionLabel(day))
-            column.addView(ui.group(items.map { MainActivity.recordRow(this, ui, it, it.id == liveId) }))
+            column.addView(ui.group(items.map { MainActivity.recordRow(this, ui, it, it.id == liveId, query) }))
         }
         list.addView(column)
     }
@@ -154,6 +173,15 @@ class RecordActivity : Activity() {
     private lateinit var backToPlaying: LinearLayout
     private lateinit var backToPlayingText: TextView
     private var toast: FixViews.Toast? = null
+    /// Opened from 会议记录's search (#33): what was searched, the lines it finds here (misheard
+    /// names too), which one is being looked at, and whether the page still has to go to it.
+    private var query = ""
+    private var terms: List<String> = emptyList()
+    private var found: List<String> = emptyList()
+    private var matchIndex = 0
+    private var landing = false
+    private lateinit var matchBar: LinearLayout
+    private lateinit var matchLabel: TextView
     private val tickPlayer = object : Runnable {
         override fun run() { updatePlayer(); if (player?.isPlaying == true) list.postDelayed(this, 250) }
     }
@@ -163,7 +191,10 @@ class RecordActivity : Activity() {
         ui = Ui(this)
         id = intent.getStringExtra("id") ?: run { finish(); return }
         tab = savedInstanceState?.getInt("tab") ?: 0
-        header = FrameLayout(this); footer = FrameLayout(this); playerHost = FrameLayout(this)
+        query = intent.getStringExtra("query")?.trim() ?: ""
+        matchIndex = savedInstanceState?.getInt("match") ?: 0
+        landing = savedInstanceState == null && query.isNotEmpty()
+        header =FrameLayout(this); footer = FrameLayout(this); playerHost = FrameLayout(this)
         list = android.widget.ListView(this).apply {
             divider = null
             selector = android.graphics.drawable.ColorDrawable(0)
@@ -220,8 +251,31 @@ class RecordActivity : Activity() {
             elevation = ui.dp(4).toFloat()
             visibility = View.GONE
         }
+        // Where the search is in this meeting: 本场 2 / 7, and the previous and next line found.
+        // Under the pinned tabs, so it stays while the transcript scrolls.
+        matchLabel = ui.text("", 13f, Palette.secondary, lines = 1).apply { fontFeatureSettings = "tnum" }
+        matchBar = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Palette.card)
+            isClickable = true // taps on it don't reach the lines under it
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(ui.dp(20), 0, ui.dp(8), 0)
+                minimumHeight = ui.dp(48)
+                addView(matchLabel, ui.weight())
+                addView(ui.iconButton(R.drawable.i_chevron_down, L("上一个"), Palette.secondary, size = 20) { step(-1) }.apply { getChildAt(0).rotation = 180f })
+                addView(ui.iconButton(R.drawable.i_chevron_down, L("下一个"), Palette.secondary, size = 20) { step(1) })
+            })
+            addView(View(context).apply { setBackgroundColor(Palette.divider) }, LinearLayout.LayoutParams(-1, 1))
+            visibility = View.GONE
+        }
+        // Moved, not laid out, under the tabs: pin() runs inside the list's layout, where a
+        // relayout of its neighbours would be missed.
+        pinnedTabs.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> placeMatchBar() }
         val body = FrameLayout(this).apply {
             addView(list, FrameLayout.LayoutParams(-1, -1))
+            addView(matchBar, FrameLayout.LayoutParams(-1, -2, android.view.Gravity.TOP))
             addView(pinnedTabs, FrameLayout.LayoutParams(-1, -2, android.view.Gravity.TOP))
             addView(playerHost, FrameLayout.LayoutParams(-1, -2, android.view.Gravity.BOTTOM))
             addView(backToPlaying, FrameLayout.LayoutParams(-2, -2, android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL).apply { bottomMargin = ui.dp(112) })
@@ -243,19 +297,76 @@ class RecordActivity : Activity() {
         if (i >= 0) list.post { list.setSelectionFromTop(i + list.headerViewsCount, ui.dp(160)) }
     }
 
+    // MARK: The search it was opened from (the Mac's 本场 n / N)
+
+    private fun currentMatch(): String? = found.getOrNull(matchIndex.coerceIn(0, maxOf(0, found.size - 1)))
+
+    /// To the previous (-1) or next (1) line found, round the ends, on the transcript.
+    fun step(d: Int) {
+        val n = found.size
+        if (n == 0) return
+        matchIndex = (matchIndex.coerceIn(0, n - 1) + d + n) % n
+        if (tab != 1) { tab = 1; render() }
+        showMatchBar()
+        adapter.notifyDataSetChanged()
+        list.post { goToMatch() }
+        Log.d("record search: ${matchIndex + 1}/$n at ${currentMatch()}")
+    }
+
+    /// The line found, in the middle of the page. A jump from far away lands by a guessed row
+    /// height and before the tabs pin, so once laid out it is centred again, exactly.
+    private fun goToMatch() {
+        val i = adapter.indexOf(currentMatch())
+        if (i < 0) return
+        val pos = i + list.headerViewsCount
+        val far = list.getChildAt(pos - list.firstVisiblePosition) == null
+        centre(i)
+        if (far) list.postDelayed({
+            val row = list.getChildAt(pos - list.firstVisiblePosition) ?: return@postDelayed
+            val top = (if (pinnedTabs.visibility == View.VISIBLE) pinnedTabs.height else 0) + matchBar.height
+            val bottom = list.height - (if (playerHost.visibility == View.VISIBLE) playerHost.height else 0)
+            list.setSelectionFromTop(pos, top + maxOf(0, (bottom - top - row.height) / 2))
+        }, 150)
+    }
+
+    private fun showMatchBar() {
+        val n = found.size
+        matchBar.visibility = if (n > 0) View.VISIBLE else View.GONE
+        if (n > 0) matchLabel.text = LF("本场 %lld / %lld", matchIndex.coerceIn(0, n - 1) + 1, n)
+    }
+
+    /// Every term in a line marked in place; the line being looked at stands out from the rest.
+    private fun marked(text: CharSequence, current: Boolean): CharSequence {
+        val ranges = TranscriptSearch.ranges(text.toString(), terms)
+        if (ranges.isEmpty()) return text
+        val s = android.text.SpannableString(text)
+        for (r in ranges) {
+            s.setSpan(android.text.style.BackgroundColorSpan(if (current) Palette.accent else Palette.accentPale), r.first, r.last + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            s.setSpan(android.text.style.ForegroundColorSpan(if (current) android.graphics.Color.WHITE else Palette.link), r.first, r.last + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        return s
+    }
+
     /// The title moves into the top bar once the big one is out of sight, and the tabs pin once
     /// theirs scroll under the top edge (the header leaves the list entirely far down a transcript).
     private fun pin() {
         // The list reports a scroll as soon as the listener is set, before the views below exist.
-        if (!::list.isInitialized || !::barTitle.isInitialized || !::pinnedTabs.isInitialized) return
+        if (!::list.isInitialized || !::barTitle.isInitialized || !::pinnedTabs.isInitialized || !::matchBar.isInitialized) return
         val gone = list.firstVisiblePosition > 0
         val top = header.top
-        fun above(v: View?) = gone || (v != null && top + (v.parent as View).top + v.bottom <= 0)
+        // Under the search's bar the tabs are already out of sight.
+        val inset = if (matchBar.visibility == View.VISIBLE) matchBar.height else 0
+        fun above(v: View?, by: Int = 0) = gone || (v != null && top + (v.parent as View).top + v.bottom <= by)
         val titleAway = above(headTitle)
         if (titleAway != barTitle.isClickable) barTitle.animate().alpha(if (titleAway) 1f else 0f).setDuration(150).start()
         barTitle.isClickable = titleAway
         barTitle.contentDescription = if (titleAway) L("回到顶部") else null
-        pinnedTabs.visibility = if (above(headTabs)) View.VISIBLE else View.GONE
+        pinnedTabs.visibility = if (above(headTabs, inset)) View.VISIBLE else View.GONE
+        placeMatchBar()
+    }
+
+    private fun placeMatchBar() {
+        matchBar.translationY = if (pinnedTabs.visibility == View.VISIBLE) pinnedTabs.height.toFloat() else 0f
     }
 
     override fun onResume() { super.onResume(); current = this; unobserve = cicada.observe(::render); shown = null; render() }
@@ -274,11 +385,21 @@ class RecordActivity : Activity() {
         val file = !live && audio().isFile
         if (!file) releasePlayer() else if (player == null && !broken) broken = ensurePlayer() == null
         val playable = file && !broken
-        val key = listOf(SessionStore.displayTitle(s), s.lines.size, s.notes?.updatedAt, generating, app.notes.status, tab, s.lines.lastOrNull()?.dst,
+        terms = TranscriptSearch.terms(query, s.notes?.terms.orEmpty())
+        found = TranscriptSearch.matches(app.store.lines(id), terms)
+        // Opened by a search that finds lines here: their transcript, at the first one.
+        if (landing && app.store.lines(id).isNotEmpty()) {
+            landing = false
+            if (found.isNotEmpty()) { tab = 1; matchIndex = 0; list.post { goToMatch() } }
+            Log.d("record search: ${found.size} matches, at ${currentMatch() ?: "-"}")
+        }
+        val key = listOf(found.size,SessionStore.displayTitle(s), s.lines.size, s.notes?.updatedAt, generating, app.notes.status, tab, s.lines.lastOrNull()?.dst,
                          s.voiceNames, app.settings.speakerVoices, live, s.hasAudio, playable, app.settings.recordAudio, app.store.lines(id).sumOf { it.fixes?.hashCode() ?: 0 }, app.fixes.pending(id).size, app.folderExport.stateKey(), app.folderExport.file(id), app.folderExport.isPending(id)).joinToString("|")
         if (key == shown) return
         shown = key
-        val top = ui.stack(0).apply { setPadding(ui.dp(20), ui.dp(4), ui.dp(20), ui.dp(6)) }
+        showMatchBar()
+        // The search's bar sits over the top of the page: the title starts under it.
+        val top = ui.stack(0).apply { setPadding(ui.dp(20), ui.dp(if (found.isEmpty()) 4 else 52), ui.dp(20), ui.dp(6)) }
         val title = ui.title(SessionStore.displayTitle(s), 28f).apply { leading(1.2f) }
         top.addView(title)
         headTitle = title
@@ -429,8 +550,9 @@ class RecordActivity : Activity() {
                 setTextColor(if (l.speaker == "me") Palette.ink else NotesViews.voiceColor(numbers[l.id]).second.takeIf { numbers[l.id] != null } ?: Palette.secondary)
             }
             val translated = !l.dst.isNullOrEmpty() && l.dst != l.shown
-            (texts.getChildAt(1) as TextView).apply { text = FixViews.text(ui, l); visibility = if (translated) View.VISIBLE else View.GONE }
-            (texts.getChildAt(2) as TextView).text = if (translated) l.dst else FixViews.text(ui, l)
+            val current = l.id == currentMatch()
+            (texts.getChildAt(1) as TextView).apply { text = marked(FixViews.text(ui, l), current); visibility = if (translated) View.VISIBLE else View.GONE }
+            (texts.getChildAt(2) as TextView).text = marked(if (translated) l.dst!! else FixViews.text(ui, l), current)
             return row
         }
     }
@@ -455,7 +577,7 @@ class RecordActivity : Activity() {
         }
     }
 
-    override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); out.putInt("tab", tab) }
+    override fun onSaveInstanceState(out: Bundle) { super.onSaveInstanceState(out); out.putInt("tab", tab); out.putInt("match", matchIndex) }
 
     // MARK: The recording (保存会议录音)
 
@@ -643,7 +765,7 @@ class RecordActivity : Activity() {
     private fun centre(index: Int) {
         if (index < 0) return
         val pos = index + list.headerViewsCount
-        val top = if (pinnedTabs.visibility == View.VISIBLE) pinnedTabs.height else 0
+        val top = (if (pinnedTabs.visibility == View.VISIBLE) pinnedTabs.height else 0) + (if (matchBar.visibility == View.VISIBLE) matchBar.height else 0)
         val bottom = list.height - (if (playerHost.visibility == View.VISIBLE) playerHost.height else 0)
         val row = list.getChildAt(pos - list.firstVisiblePosition)
         val y = top + maxOf(0, (bottom - top - (row?.height ?: ui.dp(96))) / 2)
@@ -656,7 +778,10 @@ class RecordActivity : Activity() {
         return mapOf("id" to id, "tab" to tab, "playable" to (playerHost.visibility == View.VISIBLE), "playing" to (p?.isPlaying == true),
                      "position" to ((p?.currentPosition ?: 0) / 1000.0), "line" to playing, "lineIndex" to adapter.indexOf(playing),
                      "following" to following, "backToPlaying" to (backToPlaying.visibility == View.VISIBLE),
-                     "firstVisible" to (list.firstVisiblePosition - list.headerViewsCount), "lastVisible" to (list.lastVisiblePosition - list.headerViewsCount))
+                     "firstVisible" to (list.firstVisiblePosition - list.headerViewsCount), "lastVisible" to (list.lastVisiblePosition - list.headerViewsCount),
+                     // Opened from a search: lines found, the one looked at (1-based), its id and row (never the words).
+                     "search" to if (query.isEmpty()) null else mapOf("matches" to found.size, "at" to (if (found.isEmpty()) 0 else matchIndex + 1),
+                         "line" to currentMatch(), "lineIndex" to adapter.indexOf(currentMatch()), "bar" to (matchBar.visibility == View.VISIBLE)))
     }
 
     // MARK: 更多: export and the rest

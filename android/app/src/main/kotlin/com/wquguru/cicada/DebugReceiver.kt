@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit
 ///   shareserver [url] (a local Worker; none: cicada.indaloop.app) · clipboard
 ///   存到文件夹: export state · export folder <tree uri> (one already granted; else the problem shows) · export pick
 ///   (the system picker) · export all (也存一份) · export retry · export off
+///   会议记录's search: search <text> · search-open [n] · search-step 1|-1 (state: record.search)
 class DebugReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (!BuildConfig.DEBUG) return
@@ -272,6 +273,18 @@ class DebugReceiver : BroadcastReceiver() {
             "shareSheet" -> if (arg.isEmpty()) ShareSheet.open?.let { it.dismiss() } else
                 app.startActivity(Intent(app, RecordActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     .putExtra("id", arg).putExtra("share", true))
+            // 会议记录's search (#33): `search <text>` types it into 会议记录, `search-open [n]` taps the
+            // n-th meeting found (0: the first), `search-step 1|-1` is 下一个 / 上一个 in the record.
+            // The state's record.search has the matches, where it is and the line's id.
+            "search" -> app.startActivity(Intent(app, RecordsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP).putExtra("query", arg))
+            "search-open" -> {
+                val r = RecordsActivity.current ?: return mapOf("error" to "会议记录 is not in front")
+                val found = r.debugFound()
+                Log.d("search: ${found.size} meetings ${found.joinToString(",")}")
+                val id = r.debugOpen(arg.toIntOrNull() ?: 0) ?: return mapOf("error" to "no meeting found", "found" to found)
+                return mapOf("found" to found, "opened" to id)
+            }
+            "search-step" -> RecordActivity.current?.step(arg.toIntOrNull() ?: 1) ?: return mapOf("error" to "no record in front")
             "show" -> when (arg.substringBefore(' ')) {
                 "settings" -> open(SettingsActivity::class.java)
                 "words" -> open(WordListActivity::class.java)

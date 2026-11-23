@@ -253,7 +253,8 @@ class MainActivity : Activity() {
             if (s.renamed ?: !s.title.startsWith("会议 ")) s.title else s.notes?.title?.takeIf { it.isNotEmpty() } ?: SessionStore.displayTitle(s)
 
         /// One meeting in a list: title (and 正在听), when, how long, how many lines, to-dos.
-        fun recordRow(activity: Activity, ui: Ui, s: Session, live: Boolean): LinearLayout {
+        /// `query`: found by 会议记录's search, the record opens at the lines found (#33).
+        fun recordRow(activity: Activity, ui: Ui, s: Session, live: Boolean, query: String = ""): LinearLayout {
             // The line under it says when: the title is just the meeting's name.
             val title = name(s)
             val titleView = LinearLayout(activity).apply {
@@ -269,7 +270,8 @@ class MainActivity : Activity() {
             val todos = s.notes?.todos?.size ?: 0
             val trailing = if (todos > 0) ui.badge(LF("%@ 个待办", todos), Palette.body, Palette.ground) else null
             return ui.listRow(title, meta, trailing = trailing, titleView = titleView) {
-                activity.startActivity(Intent(activity, if (live) ListeningActivity::class.java else RecordActivity::class.java).putExtra("id", s.id))
+                activity.startActivity(Intent(activity, if (live) ListeningActivity::class.java else RecordActivity::class.java).putExtra("id", s.id)
+                    .apply { if (query.isNotEmpty() && !live) putExtra("query", query) })
             }
         }
     }
