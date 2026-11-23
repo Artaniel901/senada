@@ -198,6 +198,8 @@ final class AppModel: ObservableObject {
     /// The record page's 文字记录 / 纪要 switch, kept here so a debug command can flip it.
     @Published var recordPage: RecordPage = .transcript
     @Published var query = ""
+    /// Which of the open meeting's matches the search is on (#33: a search opens the line, not just the meeting).
+    @Published var searchMatch = 0
     /// iPad: settings is a sheet over the records.
     @Published var showSettings = false
     /// What the 听会议室 card and the import button would start; they come with M2 and M3.

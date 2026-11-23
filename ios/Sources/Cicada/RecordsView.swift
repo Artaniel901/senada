@@ -85,7 +85,7 @@ struct PadRoot: View {
                 if room.isRunning {
                     LivePad()
                 } else if let s = shown {
-                    NavigationStack { RecordView(session: s) }.id(s.id)
+                    NavigationStack { RecordView(session: s, searching: true) }.id(s.id)
                 } else {
                     Color.white
                 }
@@ -282,7 +282,8 @@ struct RecordRow: View {
     }
 }
 
-/// Search on its own tab: titles and every line, original and translation.
+/// Search on its own tab: titles and every line, original and translation. A meeting opened from
+/// here opens at the first line found (RecordView's `searching`).
 struct SearchView: View {
     @EnvironmentObject var model: AppModel
     @ObservedObject var store: SessionStore
@@ -291,8 +292,9 @@ struct SearchView: View {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return sessions }
         return sessions.filter { s in
-            s.displayTitle.localizedCaseInsensitiveContains(q)
-                || s.lines.contains { $0.shown.localizedCaseInsensitiveContains(q) || ($0.dst?.localizedCaseInsensitiveContains(q) ?? false) }
+            // As the Mac's records: a name the notes say was misheard finds those lines too.
+            let terms = TranscriptSearch.terms(q, notes: s.notes?.terms ?? [])
+            return s.displayTitle.localizedCaseInsensitiveContains(q) || s.lines.contains { TranscriptSearch.matches($0, terms) }
         }
     }
 
@@ -313,10 +315,51 @@ struct SearchView: View {
             .background(Ink.ground)
             .navigationTitle("搜索")
             .navigationDestination(for: String.self) { id in
-                if let s = store.sessions.first(where: { $0.id == id }) { RecordView(session: s) }
+                if let s = store.sessions.first(where: { $0.id == id }) { RecordView(session: s, searching: true) }
             }
             // At the top, under the title: the bottom is the tab bar's.
             .searchable(text: $model.query, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("搜索文字记录"))
         }
+    }
+}
+
+extension AppModel {
+    /// The search in a meeting: the query, plus how its notes say those names were heard.
+    func searchTerms(_ s: Session) -> [String] { TranscriptSearch.terms(query, notes: s.notes?.terms ?? []) }
+    /// The ids of the lines the search finds in a meeting, in order.
+    func searchMatches(_ s: Session) -> [String] { TranscriptSearch.matches(s.lines, searchTerms(s)) }
+    /// 上一个 / 下一个, round from the last back to the first.
+    func stepSearch(_ d: Int, in s: Session) {
+        let n = searchMatches(s).count
+        guard n > 0 else { return }
+        searchMatch = (min(searchMatch, n - 1) + d + n) % n
+    }
+}
+
+/// Where the search is in the open meeting (本场 2 / 7), and the way to the previous and next line.
+struct SearchMatchBar: View {
+    let index: Int
+    let count: Int
+    let step: (Int) -> Void
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Text("本场 \(index + 1) / \(count)")
+                .font(.subheadline.monospacedDigit()).foregroundStyle(Ink.ink)
+                .padding(.leading, 16).padding(.trailing, 6)
+            button("chevron.up", "上一个", -1)
+            button("chevron.down", "下一个", 1)
+        }
+        .padding(.trailing, 4)
+        .glassEffect(.regular, in: Capsule())
+    }
+
+    private func button(_ icon: String, _ label: LocalizedStringKey, _ d: Int) -> some View {
+        Button { step(d) } label: {
+            Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(Ink.ink)
+                .frame(width: 44, height: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(label))
     }
 }

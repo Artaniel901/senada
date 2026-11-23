@@ -1,7 +1,10 @@
+import Foundation
+#if !CICADA_IOS
 import SwiftUI
+#endif
 
-/// Searching a meeting's lines, shared by the notes window and the main window's records, so a
-/// search finds the same lines (misheard names included) and marks them the same way in both.
+/// Searching a meeting's lines, shared by the notes window, the main window's records and the iOS
+/// app's search, so a search finds the same lines (misheard names included) and marks them the same way.
 enum TranscriptSearch {
     /// The query, plus every way the notes say that name was heard (江充 also finds 江松).
     static func terms(_ query: String, notes: [NoteTerm]) -> [String] {
@@ -27,7 +30,9 @@ enum TranscriptSearch {
         return lines.filter { matches($0, terms) }.map(\.id)
     }
 
-    /// Every term marked in place; the match being looked at stands out from the rest.
+    #if !CICADA_IOS
+    /// Every term marked in place; the match being looked at stands out from the rest. iOS marks
+    /// them in its own colours (ios/Sources/Cicada/RecordView.swift).
     static func highlighted(_ base: AttributedString, _ terms: [String], current: Bool) -> AttributedString {
         var a = base
         for term in terms where !term.isEmpty {
@@ -40,4 +45,5 @@ enum TranscriptSearch {
         }
         return a
     }
+    #endif
 }

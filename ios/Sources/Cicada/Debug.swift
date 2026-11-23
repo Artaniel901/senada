@@ -111,6 +111,17 @@ extension AppModel {
             tab = .search
             searchPath = []
             query = arg
+            logSearch()
+        case "searchOpen":
+            // searchOpen:<id>, as tapping a meeting in 搜索's results (no id: the first found)
+            tab = .search
+            let found = SearchView.matches(store.sessions, query)
+            searchPath = [arg.isEmpty ? found.first?.id : arg].compactMap { $0 }
+            logSearch()
+        case "searchStep":
+            // searchStep:<1|-1>, 下一个 / 上一个 in the open meeting
+            if let s = store.session(searchPath.last ?? selection ?? store.sessions.first?.id) { stepSearch(Int(arg) ?? 1, in: s) }
+            logSearch()
         case "mainShow":
             // mainShow:<id>[,transcript|notes]; an empty id is the newest meeting
             let parts = arg.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
@@ -383,6 +394,19 @@ extension AppModel {
             debugLog("state tab=\(tab.rawValue) selection=\(selection ?? "-") page=\(recordPage) sessions=\(store.sessions.count) query=\(query) notesLang=\(notesLanguageCode(selection ?? store.sessions.first?.id ?? "")) undo=\(speakerUndo?.text ?? "-")")
         default:
             debugLog("debug command unknown: \(cmd)")
+        }
+    }
+
+    /// After the open meeting has settled: how many meetings the search finds, and where it is in the open one.
+    private func logSearch() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [self] in
+            let found = SearchView.matches(store.sessions, query)
+            let open = store.session(searchPath.last ?? (tab == .search ? nil : selection))
+            let ms = open.map(searchMatches) ?? []
+            let at = ms.isEmpty ? nil : ms[min(searchMatch, ms.count - 1)]
+            let text = at.flatMap { id in open?.lines.first { $0.id == id } }.map { String($0.shown.prefix(40)) } ?? "-"
+            debugLog("search: \"\(query)\" \(found.count) meetings, open \(open?.id ?? "-") page=\(recordPage) "
+                     + "matches=\(ms.count) at=\(ms.isEmpty ? 0 : min(searchMatch, ms.count - 1) + 1)/\(ms.count) line=\(at ?? "-") \"\(text)\"")
         }
     }
 }

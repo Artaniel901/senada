@@ -32,3 +32,4 @@ Sources/Cicada/RichCopy.swift
 Sources/Cicada/NotesEditing.swift
 Sources/Cicada/SpeakerEnrollment.swift
 Sources/Cicada/HandsFree.swift
+Sources/Cicada/TranscriptSearch.swift

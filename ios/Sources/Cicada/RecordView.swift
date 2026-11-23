@@ -10,6 +10,9 @@ struct RecordView: View {
     @EnvironmentObject var ling: LingClient
     @EnvironmentObject var notes: NotesEngine
     let session: Session
+    /// Opened from 搜索 (or the iPad's sidebar search): the transcript opens at the first line found,
+    /// every match marked, as the Mac's records (#33).
+    var searching = false
     @StateObject private var player = RecordPlayer()
     @State private var needsKey = false
     /// What's typed into the title; nil until it is touched, so opening it changes nothing.
@@ -66,7 +69,7 @@ struct RecordView: View {
                             .padding(.top, 14)
                     }
                     TranscriptList(session: session, playing: player.lineID(in: session), focus: picked ?? playingNumber(voicesOn ? TranscriptExport.speakerNumbers(session) : [:]), dimOthers: picked != nil,
-                                   playable: player.available) { player.play(from: $0) }
+                                   playable: player.available, terms: searchTerms, found: currentMatch) { player.play(from: $0) }
                 case .notes:
                     if notes.generatingID == session.id {
                         HStack(spacing: 10) {
@@ -90,6 +93,15 @@ struct RecordView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .debugScroll)) { n in
             if let id = n.object as? String { proxy.scrollTo(id, anchor: .center) }
+        }
+        .onAppear {
+            showMatches()
+            // The lazy list needs a moment to lay out (and the page to switch) before it can go to the line found.
+            if let id = currentMatch { DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { proxy.scrollTo(id, anchor: .center) } }
+        }
+        .onChange(of: model.query) { showMatches() }
+        .onChange(of: currentMatch) { _, id in
+            if let id, model.recordPage == .transcript { withAnimation { proxy.scrollTo(id, anchor: .center) } }
         }
         // The transcript follows the recording while it plays, until scrolled by hand (as on the Mac).
         .onScrollPhaseChange { _, phase in if phase == .interacting { player.userScrolled() } }
@@ -138,6 +150,7 @@ struct RecordView: View {
                 SpeakerUndoBar(text: u.text) { model.undoSpeakerEdit() }.padding(.horizontal, 16).padding(.bottom, 8)
             }
             if model.copiedNotes == session.id { CopiedToast().padding(.horizontal, 16).padding(.bottom, player.available ? 0 : 8) }
+            if !player.available, let bar = matchBar { bar.padding(.bottom, 8) }
             if !player.available { FixToast(fixes: model.fixes).padding(.horizontal, 16).padding(.bottom, 8) }
             if !player.available, player.missing {
                 Text(player.own ? L("找不到录音，没法播放") : L("找不到原文件，没法播放"))
@@ -152,6 +165,7 @@ struct RecordView: View {
                         SpeakerUndoBar(text: u.text) { model.undoSpeakerEdit() }
                     }
                     FixToast(fixes: model.fixes)
+                    if let bar = matchBar { bar }
                     FollowPill(player: player)
                     PlayerBar(player: player)
                 }
@@ -178,6 +192,27 @@ struct RecordView: View {
         .onReceive(NotificationCenter.default.publisher(for: .debugPlay)) { n in
             if let t = n.object as? Double { player.play(from: t) }
         }
+    }
+
+    /// The search in this meeting: its terms (misheard names too), and the line being looked at.
+    private var searchTerms: [String] { searching ? model.searchTerms(session) : [] }
+    private var matches: [String] { TranscriptSearch.matches(session.lines, searchTerms) }
+    private var currentMatch: String? {
+        let ms = matches
+        return ms.isEmpty ? nil : ms[min(model.searchMatch, ms.count - 1)]
+    }
+
+    /// A search that finds lines here opens the transcript at the first one.
+    private func showMatches() {
+        guard searching else { return }
+        model.searchMatch = 0
+        if !matches.isEmpty { model.recordPage = .transcript }
+    }
+
+    private var matchBar: SearchMatchBar? {
+        let n = matches.count
+        guard n > 0, model.recordPage == .transcript else { return nil }
+        return SearchMatchBar(index: min(model.searchMatch, n - 1), count: n) { model.stepSearch($0, in: session) }
     }
 
     /// The speaker the recording is at, while it plays.
@@ -331,6 +366,9 @@ struct TranscriptList: View {
     var dimOthers = false
     /// With a recording, a tap on a line plays from it (and opens what was fixed in it, if anything).
     var playable = false
+    /// A search's terms, marked in place; the line it is on stands out.
+    var terms: [String] = []
+    var found: String? = nil
     let seek: (Double) -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
     /// The design's 14 pt grey original over a 16 pt translation, scaling with the text size.
@@ -358,9 +396,9 @@ struct TranscriptList: View {
                                     .foregroundStyle(l.speaker == "me" ? Ink.accentText : (focus == nil || mine ? Ink.ink : Ink.tertiary))
                             }
                         }
-                        Text(FixedText.attributed(l)).font(.system(size: srcSize)).foregroundStyle(Ink.secondary).lineSpacing(2)
+                        Text(TranscriptSearch.highlighted(FixedText.attributed(l), terms, current: l.id == found)).font(.system(size: srcSize)).foregroundStyle(Ink.secondary).lineSpacing(2)
                         if let d = l.dst, d != l.src, d != l.shown {
-                            Text(d).font(.system(size: dstSize)).foregroundStyle(Ink.ink).lineSpacing(4)
+                            Text(TranscriptSearch.highlighted(AttributedString(d), terms, current: l.id == found)).font(.system(size: dstSize)).foregroundStyle(Ink.ink).lineSpacing(4)
                         }
                         // Tapped open: what its fixed words were heard as, 改回, and 改这句….
                         if model.openLine == l.id {
@@ -716,6 +754,22 @@ struct FollowPill: View {
             }
             .buttonStyle(.plain)
         }
+    }
+}
+
+extension TranscriptSearch {
+    /// The Mac's marks in iOS's colours: every term on the pale accent, the line being looked at solid.
+    static func highlighted(_ base: AttributedString, _ terms: [String], current: Bool) -> AttributedString {
+        var a = base
+        for term in terms where !term.isEmpty {
+            var from = a.startIndex
+            while from < a.endIndex, let r = a[from...].range(of: term, options: .caseInsensitive) {
+                a[r].backgroundColor = current ? Ink.accent : Ink.accentWash
+                a[r].foregroundColor = current ? .white : Ink.accentText
+                from = r.upperBound
+            }
+        }
+        return a
     }
 }
 
