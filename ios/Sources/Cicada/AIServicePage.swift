@@ -10,6 +10,11 @@ enum AIPrefs {
     static let models = "aiModels"
     static let voiceModels = "aiVoiceModels"
     static let customBase = "aiCustomBase"
+    /// 语音和文字只发给你的服务, the Mac's key: with the user's own service, Google is never asked.
+    static let customOnly = "aiCustomOnly"
+
+    /// Whether the translator leaves Google out: only with the user's own service and the switch on.
+    static var googleOff: Bool { current.id == .custom && d.bool(forKey: customOnly) }
 
     private static var d: UserDefaults { .standard }
     static var current: AIProvider { AIProvider.named(d.string(forKey: provider) ?? "ling") }
@@ -65,6 +70,7 @@ struct AIServicePage: View {
     @EnvironmentObject var ling: LingClient
     @AppStorage(AIPrefs.provider) private var provider = "ling"
     @AppStorage(AIPrefs.customBase) private var base = ""
+    @AppStorage(AIPrefs.customOnly) private var customOnly = false
     @State private var customModel = AIPrefs.modelMap["custom"] ?? ""
     @State private var customVoice = AIPrefs.voiceMap["custom"] ?? ""
     @State private var tick = 0
@@ -131,6 +137,10 @@ struct AIServicePage: View {
                 }
                 Text(p.clones ? L("填入 Ling key：声音更自然，还能用你自己的声音") : L("只有 Ling 能用你自己的声音"))
                     .font(.footnote).foregroundStyle(Ink.secondary).padding(.horizontal, 4).padding(.top, 10)
+                if p.id == .custom {
+                    Card { onlyRow }.padding(.top, 24)
+                    Text(onlyDetail).font(.footnote).foregroundStyle(Ink.secondary).padding(.horizontal, 4).padding(.top, 8)
+                }
             }
             .padding(.horizontal, 16).padding(.bottom, 120)
             .frame(maxWidth: 640).frame(maxWidth: .infinity)
@@ -141,6 +151,27 @@ struct AIServicePage: View {
         .onAppear { ling.recheckIfFailed() }
         .refreshable { await ling.check() }
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// 语音和文字只发给你的服务, as on the Mac: Google is never asked.
+    private var onlyRow: some View {
+        Toggle(isOn: Binding(get: { customOnly }, set: { customOnly = $0; model.aiChanged() })) {
+            Text("语音和文字只发给你的服务").foregroundStyle(Ink.ink)
+        }
+        .tint(Ink.ink)
+        .padding(.horizontal, 16).frame(minHeight: 50)
+    }
+
+    /// What the switch costs, and while the service can't be reached, what stands in.
+    private var onlyDetail: String {
+        let down: Bool
+        switch ling.keyState {
+        case .invalid, .unreachable: down = customOnly
+        default: down = false
+        }
+        return !down ? L("不用 Google 翻译；说话时要等整句说完才出译文")
+            : Recognition.hasOnDeviceTranslation ? L("现在连不上：整句先用本机翻译，半句只显示原文")
+            : L("现在连不上：新字幕暂时只有原文")
     }
 
     private func serviceRow(_ s: AIProvider) -> some View {
@@ -212,8 +243,9 @@ extension AppModel {
     /// service's voices.
     func aiChanged() {
         AIPrefs.applyVoices()
+        translator.googleOff = AIPrefs.googleOff
         ling.reconfigure()
-        debugLog("ai: service \(AIPrefs.config.provider.id.rawValue) model \(AIPrefs.config.textModel) voice \(AIPrefs.config.voiceModel ?? "-")")
+        debugLog("ai: service \(AIPrefs.config.provider.id.rawValue) model \(AIPrefs.config.textModel) voice \(AIPrefs.config.voiceModel ?? "-") googleOff=\(translator.googleOff)")
         objectWillChange.send()
     }
 }

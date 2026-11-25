@@ -182,6 +182,10 @@ extension AppModel {
             // A meeting without the microphone or the recognizer, fed lines by `heard:`.
             RoomListen.silent = arg != "off"
         case "heard": room.debugHeard(arg)
+        case "aiCustomOnly":
+            // aiCustomOnly:on|off, 语音和文字只发给你的服务, as on the Mac.
+            UserDefaults.standard.set(arg == "on", forKey: AIPrefs.customOnly)
+            aiChanged()
         case "aiService":
             // aiService:<ling|openrouter|zenmux|openai|custom>[,<text model>]; aiService opens the page
             let p = arg.split(separator: ",", maxSplits: 1).map(String.init)

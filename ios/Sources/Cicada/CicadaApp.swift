@@ -231,6 +231,7 @@ final class AppModel: ObservableObject {
         // 设置 › AI 服务 (AIServicePage.swift): the Mac's services and settings.
         ling.config = { AIPrefs.config }
         AIPrefs.applyVoices()
+        translator.googleOff = AIPrefs.googleOff
         wireNotes()
         // 存到文件夹, as the Mac's AppModel: a meeting is written once settled and rewritten when it changes.
         folderExport.settling = { [weak self] id in self?.notes.settling(id) ?? false }

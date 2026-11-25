@@ -245,7 +245,19 @@ struct TranslateDownCard: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
-        if model.translationDown {
+        // 语音和文字只发给你的服务, and the service doesn't translate: it picks up by itself, and no
+        // other service is offered, which would send the meeting elsewhere (as the Mac's notes window).
+        if model.translationHealth.googleOff, model.translationHealth.sentencesUntranslated {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "hourglass").foregroundStyle(Ink.secondary).padding(.top, 2)
+                Text(L("译文等 \(model.ling.serviceLabel) 恢复 · 字幕先显示原文"))
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Ink.ink).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        } else if model.translationDown {
             Button { if !model.ling.hasKey { model.tab = .settings; model.showSettings = true } } label: {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Ink.accent).padding(.top, 2)
