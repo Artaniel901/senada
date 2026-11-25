@@ -196,6 +196,8 @@ final class RoomListen: ObservableObject {
         last = nil
         counter = 0
         speakers.reset()
+        heldJoin = nil
+        voicePending = [:]
         if Self.silent {
             let s = store.begin()
             store.markLiveInRoom()
@@ -521,6 +523,11 @@ final class RoomListen: ObservableObject {
         detector = nil
         // Ended before the language was settled: what was heard is kept, in the language listened in.
         if !settled, sessionID != nil { settle() }
+        // A piece still hearing its voice is recorded now, on its own, before the meeting closes.
+        if let h = heldJoin {
+            heldJoin = nil
+            voicePending[h.piece.start] = appendLine(h.piece, h.text)
+        }
         settled = true
         isRunning = false
         paused = false
@@ -575,24 +582,75 @@ final class RoomListen: ObservableObject {
         draft = ""
         draftTranslation = ""
         draftEpoch += 1
-        guard final.contains(where: \.isLetter), let start = startedAt else { return }
+        guard final.contains(where: \.isLetter), startedAt != nil else { return }
         contentLog("FINAL [\(lang.locale)] \(final)")
+        // A piece still waiting for its voice is overtaken: it stands on its own.
+        if let h = heldJoin {
+            heldJoin = nil
+            voicePending[h.piece.start] = appendLine(h.piece, h.text)
+        }
         // One sentence a pause cut in two: the earlier line takes the rest.
         if let prev = last, lines.last?.id == prev.id,
            HeardText.continues(prev.src, final, gap: piece.start - prev.end, cut: false) {
-            let joined = HeardText.join(prev.src, final)
-            last = (prev.id, joined, piece.end)
-            emitted(piece, final, line: prev.id)
-            store.setSource(lineID: prev.id, joined)
-            if let i = lines.firstIndex(where: { $0.id == prev.id }) { lines[i].src = joined }
-            if let sid = sessionID { onHeard?(sid, prev.id) }
-            translate(prev.id, joined)
+            // Two voices never share a line: hear whose this is first (a few hundredths of a second), as on the Mac.
+            if audio.voices, final.filter(\.isLetter).count >= 2,
+               let samples = audio.voiceSamples(from: piece.start, to: piece.end) {
+                heldJoin = (piece, final)
+                let key = piece.start
+                speakers.voice(of: samples) { [weak self] a in self?.heardVoice(key, a) }
+                return
+            }
+            joinLine(piece, final, onto: prev)
             return
         }
+        let id = appendLine(piece, final)
+        if let samples = audio.voiceSamples(from: piece.start, to: piece.end) {
+            speakers.tag(lineID: id, samples: samples)
+        }
+    }
+
+    /// A finished piece waiting to hear whether its voice is the line before's.
+    private var heldJoin: (piece: Recognition.Piece, text: String)?
+    /// Pieces recorded on their own while their voice was being heard, by start time.
+    private var voicePending: [Double: String] = [:]
+
+    private func heardVoice(_ key: Double, _ a: SpeakerAssignment) {
+        guard let h = heldJoin, h.piece.start == key else {
+            // Already recorded on its own (another line came first).
+            if let id = voicePending.removeValue(forKey: key) { apply(a, to: id) }
+            return
+        }
+        heldJoin = nil
+        if let prev = last, let line = lines.last, line.id == prev.id,
+           a.voice == nil || line.voice == nil || a.voice == line.voice {
+            joinLine(h.piece, h.text, onto: prev)   // the earlier line's voice stays
+        } else {
+            apply(a, to: appendLine(h.piece, h.text))
+        }
+    }
+
+    /// A voice heard for a line not recorded yet, put on it once it is.
+    private func apply(_ a: SpeakerAssignment, to id: String) {
+        guard let voice = a.voice else { return }
+        if let match = a.match, match.kind == .auto { speakers.onProfile?(id, voice, match) } else { speakers.onVoice?(id, voice) }
+    }
+
+    private func joinLine(_ piece: Recognition.Piece, _ final: String, onto prev: (id: String, src: String, end: Double)) {
+        let joined = HeardText.join(prev.src, final)
+        last = (prev.id, joined, piece.end)
+        emitted(piece, final, line: prev.id)
+        store.setSource(lineID: prev.id, joined)
+        if let i = lines.firstIndex(where: { $0.id == prev.id }) { lines[i].src = joined }
+        if let sid = sessionID { onHeard?(sid, prev.id) }
+        translate(prev.id, joined)
+    }
+
+    @discardableResult
+    private func appendLine(_ piece: Recognition.Piece, _ final: String) -> String {
         counter += 1
         let id = "r\(counter)"
         // Where the sentence started, in meeting time: the recognizer's clock runs on the audio fed.
-        let t = max(0, Date().timeIntervalSince(start) - max(0, audio.fedSeconds - piece.start))
+        let t = max(0, Date().timeIntervalSince(startedAt ?? Date()) - max(0, audio.fedSeconds - piece.start))
         store.append(TranscriptLine(id: id, t: t, speaker: "them", src: final, dst: nil,
                                     srcLang: lang.code, dstLang: target))
         lines.append(Line(id: id, src: final, dst: nil, voice: nil, t: t))
@@ -600,10 +658,8 @@ final class RoomListen: ObservableObject {
         if lines.count > 60 { lines.removeFirst(lines.count - 60) }
         last = (id, final, piece.end)
         emitted(piece, final, line: id)
-        if let samples = audio.voiceSamples(from: piece.start, to: piece.end) {
-            speakers.tag(lineID: id, samples: samples)
-        }
         translate(id, final)
+        return id
     }
 
     // MARK: 会后重听
