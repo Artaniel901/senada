@@ -491,7 +491,7 @@ class Api:
             bar = webview.create_window(
                 "Subtitle Senada", url=os.path.join(paths.UI, "overlay.html"), js_api=self, width=width, height=height,
                 frameless=True, easy_drag=True, on_top=True, focus=False, background_color="#1D1A4A")
-            bar.events.shown += lambda: _place_at_bottom(bar)
+            bar.events.shown += lambda: (_place_at_bottom(bar), _mark_window(bar))
             self._windows["overlay"] = bar
         self._settings.update({"overlay": bool(show)})
         self._emit({"type": "overlay-state", "on": bool(show)})
@@ -537,6 +537,55 @@ def _own_taskbar_button() -> None:
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(paths.APP_ID)
 
 
+def _mark_window(window) -> None:
+    """Puts Senada's app id on the window itself (System.AppUserModel.ID). Docks that name a window by
+    the program running it see pythonw.exe and show Python's logo; with the id on the window they can
+    find Senada's shortcut, its name and its icon instead. The process-wide id above does not reach them."""
+    import ctypes
+    import uuid
+    from ctypes import wintypes
+
+    class GUID(ctypes.Structure):
+        _fields_ = [("bytes", ctypes.c_ubyte * 16)]
+
+    class PROPERTYKEY(ctypes.Structure):
+        _fields_ = [("fmtid", GUID), ("pid", wintypes.DWORD)]
+
+    class PROPVARIANT(ctypes.Structure):
+        _fields_ = [("vt", ctypes.c_ushort), ("pad", ctypes.c_ushort * 3), ("value", ctypes.c_void_p),
+                    ("pad2", ctypes.c_void_p)]
+
+    def guid(text: str) -> GUID:
+        g = GUID()
+        g.bytes[:] = uuid.UUID(text).bytes_le
+        return g
+
+    try:
+        hwnd = window.native.Handle.ToInt64()
+        ctypes.windll.ole32.CoInitialize(None)  # pywebview runs event handlers on their own threads
+        store = ctypes.c_void_p()
+        shell32 = ctypes.windll.shell32
+        shell32.SHGetPropertyStoreForWindow.argtypes = [wintypes.HWND, ctypes.POINTER(GUID), ctypes.POINTER(ctypes.c_void_p)]
+        iid = guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99")  # IPropertyStore
+        if shell32.SHGetPropertyStoreForWindow(hwnd, ctypes.byref(iid), ctypes.byref(store)) != 0:
+            return
+        vtable = ctypes.cast(ctypes.cast(store, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
+        set_value = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(PROPERTYKEY),
+                                       ctypes.POINTER(PROPVARIANT))(vtable[6])
+        commit = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)(vtable[7])
+        release = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtable[2])
+        key = PROPERTYKEY(guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5)  # PKEY_AppUserModel_ID
+        text = ctypes.create_unicode_buffer(paths.APP_ID)
+        value = PROPVARIANT(31, (0, 0, 0), ctypes.cast(text, ctypes.c_void_p), None)  # VT_LPWSTR
+        try:
+            set_value(store, ctypes.byref(key), ctypes.byref(value))
+            commit(store)
+        finally:
+            release(store)
+    except Exception as e:  # a missing id only costs the dock icon
+        log(f"window id not set: {e}")
+
+
 def main() -> None:
     import ctypes
     import webview
@@ -565,6 +614,7 @@ def main() -> None:
             bar.destroy()
 
     main_window.events.closing += closing
+    main_window.events.shown += lambda: _mark_window(main_window)
     storage = os.path.join(paths.data(), "webview")
     _fresh_ui(storage)
     webview.start(started, gui="edgechromium", private_mode=False, icon=paths.ICON,
