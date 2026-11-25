@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/icon.png" width="128" height="128" alt="知了图标">
+  <img src="../icon.png" width="128" height="128" alt="知了图标">
 </p>
 
 <h1 align="center">知了 · Cicada</h1>
@@ -37,7 +37,7 @@
 **能在哪里用**：电脑能出声的地方都行——腾讯会议、飞书、钉钉、企业微信、Zoom、Teams、Google Meet、Webex、Discord、Telegram 语音，还有 X Spaces、YouTube、Twitch、B 站直播、播客和网页。手机上系统不让录通话和会议 app 的声音，开外放用“面对面”就行。
 
 <p align="center">
-  <img src="docs/demo.gif" width="800" alt="YouTube 播着 Bloomberg 英文直播，右边是知了实时整理的中文纪要、议题与鱼骨图，底部是双语字幕">
+  <img src="../demo.gif" width="800" alt="YouTube 播着 Bloomberg 英文直播，右边是知了实时整理的中文纪要、议题与鱼骨图，底部是双语字幕">
 </p>
 
 ## 平台
@@ -45,9 +45,9 @@
 | 平台 | 系统要求 | 说明 |
 |---|---|---|
 | Mac | macOS 14.4+，Apple 芯片 / Intel | 功能最全。Apple 芯片本机识别（不填 key 也能用），Intel 版需 Ling key（识别走 Ming） |
-| Windows | Windows 10 2004+，x64 / ARM64 | 需 Ling、OpenRouter、ZenMux 等 AI 服务 key，见 [windows/](windows/README.md) |
-| Linux | Ubuntu 22.04 / 24.04 桌面版 | 需 AI 服务 key；纪要窗会被屏幕共享看到，见 [linux/](linux/README.md) |
-| Android | Android 10+ | 需 AI 服务 key；视频与直播字幕、面对面互译，见 [android/](android/README.md) |
+| Windows | Windows 10 2004+，x64 / ARM64 | 需 Ling、OpenRouter、ZenMux 等 AI 服务 key，见 [windows/](../../windows/README.md) |
+| Linux | Ubuntu 22.04 / 24.04 桌面版 | 需 AI 服务 key；纪要窗会被屏幕共享看到，见 [linux/](../../linux/README.md) |
+| Android | Android 10+ | 需 AI 服务 key；视频与直播字幕、面对面互译，见 [android/](../../android/README.md) |
 
 安装包都在 [官网下载页](https://cicada.indaloop.app/download/) 和 [Releases](https://github.com/wquguru/cicada/releases)。四个平台共用版本号和会议记录格式，下面以 Mac 版为例说明功能。
 
@@ -78,7 +78,7 @@ Mac 上还能在“设置 › 同声传译”打开“不用按键”：听会�
 开启后会把系统麦克风切到一键下载安装的虚拟驱动 BlackHole 2ch。填了 Ling API key 可以用自然人声，或用 8 到 30 秒录音克隆你自己的声音；不填也能用 Mac 自带语音。Windows、Linux 的同传和 Android 的面对面也能用你自己的声音，填了 Ling key 后录 10 到 15 秒即可。
 
 <p align="center">
-  <img src="docs/interpreting.png" width="640" alt="同声传译设置页，包含按住右 Option 键说话、目标语言、Ming 声音试听与本机声音选择">
+  <img src="../interpreting.png" width="640" alt="同声传译设置页，包含按住右 Option 键说话、目标语言、Ming 声音试听与本机声音选择">
 </p>
 
 ### 会议记录
@@ -90,7 +90,7 @@ Mac 上还能在“设置 › 同声传译”打开“不用按键”：听会�
 点“分享…”能生成纪要链接（可选带上双语全文），支持设有效期和密码，上传前会自动拦截密钥、未公开公司信息等敏感内容。
 
 <p align="center">
-  <img src="docs/records.png" width="640" alt="会议记录窗口，显示识别出的说话人名字和逐句英中双语文字记录">
+  <img src="../records.png" width="640" alt="会议记录窗口，显示识别出的说话人名字和逐句英中双语文字记录">
 </p>
 
 ## 隐私与权限
@@ -147,7 +147,7 @@ Mac 版用到什么功能才要什么权限，拒了也不耽误别的功能：
 下载 `Cicada-<版本>-macOS-AppleSilicon.dmg` 或 `Cicada-<版本>-macOS-Intel.dmg`，拖进应用程序文件夹（可用 `shasum -a 256 Cicada-*.dmg` 校验）。已通过苹果签名与公证，双击就能打开。跟着首次引导开权限、试听示例会议即可。
 
 <p align="center">
-  <img src="docs/onboarding.png" width="640" alt="首次引导第二步，播放双人示例会议并实时显示双语字幕">
+  <img src="../onboarding.png" width="640" alt="首次引导第二步，播放双人示例会议并实时显示双语字幕">
 </p>
 
 ### Windows
@@ -183,7 +183,7 @@ defaults delete com.wquguru.cicada
 
 ## 开发
 
-Mac 版只需安装 Xcode Command Line Tools（`xcode-select --install`），无第三方依赖。macOS 27 上若报 `SwiftUIMacros` 缺失，安装完整 Xcode 并运行 `sudo xcode-select -s /Applications/Xcode.app`。其他平台构建见 [windows/README.md](windows/README.md)、[linux/README.md](linux/README.md)、[android/README.md](android/README.md)。
+Mac 版只需安装 Xcode Command Line Tools（`xcode-select --install`），无第三方依赖。macOS 27 上若报 `SwiftUIMacros` 缺失，安装完整 Xcode 并运行 `sudo xcode-select -s /Applications/Xcode.app`。其他平台构建见 [windows/README.md](../../windows/README.md)、[linux/README.md](../../linux/README.md)、[android/README.md](../../android/README.md)。
 
 ```bash
 scripts/build.sh            # 编译开发版 → build/Cicada.app（名为 Cicada Dev，可与正式版同时运行）

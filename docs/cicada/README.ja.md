@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/icon.png" width="128" height="128" alt="Cicada のアイコン">
+  <img src="../icon.png" width="128" height="128" alt="Cicada のアイコン">
 </p>
 
 <h1 align="center">Cicada · 知了</h1>
@@ -37,7 +37,7 @@
 **使える場所**：パソコンから音が出るものなら何でも使えます。Tencent Meeting、Feishu、DingTalk、WeCom、Zoom、Teams、Google Meet、Webex、Discord、Telegram の音声通話、X スペース、YouTube、Twitch、Bilibili Live、ポッドキャスト、ブラウザなどに対応しています。スマートフォンでは、OS の制限により通話や会議アプリの音声を録音できないため、スピーカーフォンにして「対面」モードをお使いください。
 
 <p align="center">
-  <img src="docs/demo.gif" width="800" alt="YouTube の Bloomberg の英語のライブ配信。右側に Cicada のリアルタイムの中国語のメモ、トピック、フィッシュボーン図、下部に二か国語の字幕が表示されています">
+  <img src="../demo.gif" width="800" alt="YouTube の Bloomberg の英語のライブ配信。右側に Cicada のリアルタイムの中国語のメモ、トピック、フィッシュボーン図、下部に二か国語の字幕が表示されています">
 </p>
 
 ## 対応プラットフォーム
@@ -45,9 +45,9 @@
 | プラットフォーム | 動作環境 | 備考 |
 |---|---|---|
 | Mac | macOS 14.4 以降、Apple シリコン / Intel | すべての機能に対応。Apple シリコンは端末内で認識（キーなしでも利用可）、Intel 版は Ling のキーが必要（Ming で認識） |
-| Windows | Windows 10 2004 以降、x64 / ARM64 | Ling、OpenRouter、ZenMux などの AI サービスのキーが必要。[windows/](windows/README.md) を参照 |
-| Linux | Ubuntu 22.04 / 24.04 デスクトップ | AI サービスのキーが必要。メモのウィンドウは画面共有に映ります。[linux/](linux/README.md) を参照 |
-| Android | Android 10 以降 | AI サービスのキーが必要。動画や配信の字幕、対面での通訳。[android/](android/README.md) を参照 |
+| Windows | Windows 10 2004 以降、x64 / ARM64 | Ling、OpenRouter、ZenMux などの AI サービスのキーが必要。[windows/](../../windows/README.md) を参照 |
+| Linux | Ubuntu 22.04 / 24.04 デスクトップ | AI サービスのキーが必要。メモのウィンドウは画面共有に映ります。[linux/](../../linux/README.md) を参照 |
+| Android | Android 10 以降 | AI サービスのキーが必要。動画や配信の字幕、対面での通訳。[android/](../../android/README.md) を参照 |
 
 インストーラーは[公式サイトのダウンロードページ](https://cicada.indaloop.app/ja/download/)と [Releases](https://github.com/wquguru/cicada/releases) にあります。4 つのプラットフォームはバージョン番号と会議の記録形式を共有しており、以下では Mac 版を例に機能を説明します。
 
@@ -78,7 +78,7 @@ Mac では「設定 › 同時通訳」で「キーを押さずに」もオン�
 オンにすると、ワンクリックでダウンロード・インストールできる仮想ドライバー BlackHole 2ch にシステムマイクを切り替えます。Ling API キーを設定すれば自然な音声を使ったり、8〜30 秒の録音から自分の声をクローンしたりできます。設定しなくても Mac 標準の音声が使えます。Windows と Linux の同時通訳、Android の対面モードでも、Ling API キーがあれば 10〜15 秒の録音から自分の声を使えます。
 
 <p align="center">
-  <img src="docs/interpreting.png" width="640" alt="右 Option の話すキー、翻訳先の言語、Ming の音声のプレビュー、macOS の音声を表示した通訳の設定">
+  <img src="../interpreting.png" width="640" alt="右 Option の話すキー、翻訳先の言語、Ming の音声のプレビュー、macOS の音声を表示した通訳の設定">
 </p>
 
 ### 会議の記録
@@ -90,7 +90,7 @@ Mac では「設定 › 同時通訳」で「キーを押さずに」もオン�
 「共有…」でメモのリンク（任意で二か国語の全文付き）を作成でき、有効期限とパスワードの設定に対応しています。アップロード前にはキーや未公開の社内情報などの機密内容を自動でブロックします。
 
 <p align="center">
-  <img src="docs/records.png" width="640" alt="識別された話者と、1 行ずつの英語と中国語の書き起こしを表示した会議の記録のウィンドウ">
+  <img src="../records.png" width="640" alt="識別された話者と、1 行ずつの英語と中国語の書き起こしを表示した会議の記録のウィンドウ">
 </p>
 
 ## プライバシーと権限
@@ -147,7 +147,7 @@ macOS 14.4 以降（Apple シリコンおよび Intel 対応）が必要です�
 `Cicada-<バージョン>-macOS-AppleSilicon.dmg` または `Cicada-<バージョン>-macOS-Intel.dmg` をダウンロードし、アプリケーションフォルダにドラッグします（`shasum -a 256 Cicada-*.dmg` で検証可能）。Apple の署名と公証を受けているため、ダブルクリックで開けます。初回ガイドに従って権限を許可し、サンプル会議を試聴すれば準備完了です。
 
 <p align="center">
-  <img src="docs/onboarding.png" width="640" alt="オンボーディングのステップ 2。リアルタイムの二か国語の字幕付きで、2 人のサンプルの会議を再生しています">
+  <img src="../onboarding.png" width="640" alt="オンボーディングのステップ 2。リアルタイムの二か国語の字幕付きで、2 人のサンプルの会議を再生しています">
 </p>
 
 ### Windows
@@ -183,7 +183,7 @@ defaults delete com.wquguru.cicada
 
 ## 開発
 
-Mac 版は Xcode Command Line Tools（`xcode-select --install`）を入れるだけでよく、サードパーティの依存関係はありません。macOS 27 で `SwiftUIMacros` が見つからないエラーが出る場合は、完全版の Xcode をインストールして `sudo xcode-select -s /Applications/Xcode.app` を実行してください。ほかのプラットフォームのビルドについては [windows/README.md](windows/README.md)、[linux/README.md](linux/README.md)、[android/README.md](android/README.md) をご覧ください。
+Mac 版は Xcode Command Line Tools（`xcode-select --install`）を入れるだけでよく、サードパーティの依存関係はありません。macOS 27 で `SwiftUIMacros` が見つからないエラーが出る場合は、完全版の Xcode をインストールして `sudo xcode-select -s /Applications/Xcode.app` を実行してください。ほかのプラットフォームのビルドについては [windows/README.md](../../windows/README.md)、[linux/README.md](../../linux/README.md)、[android/README.md](../../android/README.md) をご覧ください。
 
 ```bash
 scripts/build.sh            # 编译开发版 → build/Cicada.app（名为 Cicada Dev，可与正式版同时运行）

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/icon.png" width="128" height="128" alt="Cicada 아이콘">
+  <img src="../icon.png" width="128" height="128" alt="Cicada 아이콘">
 </p>
 
 <h1 align="center">Cicada · 知了</h1>
@@ -37,7 +37,7 @@
 **사용 가능한 곳**: 컴퓨터에서 소리가 나는 모든 곳에서 쓸 수 있습니다. Tencent Meeting, Feishu, DingTalk, WeCom, Zoom, Teams, Google Meet, Webex, Discord, Telegram 음성 채팅은 물론 X Spaces, YouTube, Twitch, Bilibili 라이브, 팟캐스트 및 웹페이지도 지원합니다. 스마트폰에서는 시스템에서 통화 및 회의 앱 소리 녹음을 허용하지 않으므로, 스피커폰을 켜고 '대면' 모드를 사용하면 됩니다.
 
 <p align="center">
-  <img src="docs/demo.gif" width="800" alt="YouTube에서 재생 중인 Bloomberg 영어 라이브 방송과 오른쪽의 Cicada가 실시간으로 정리한 중국어 회의록, 안건, 피시본 다이어그램, 하단의 이중 언어 자막">
+  <img src="../demo.gif" width="800" alt="YouTube에서 재생 중인 Bloomberg 영어 라이브 방송과 오른쪽의 Cicada가 실시간으로 정리한 중국어 회의록, 안건, 피시본 다이어그램, 하단의 이중 언어 자막">
 </p>
 
 ## 지원 플랫폼
@@ -45,9 +45,9 @@
 | 플랫폼 | 요구 사항 | 비고 |
 |---|---|---|
 | Mac | macOS 14.4+, Apple silicon / Intel | 모든 기능 지원. Apple silicon은 기기 내 음성 인식(키 없이도 사용 가능), Intel 버전은 Ling 키 필요(Ming으로 음성 인식) |
-| Windows | Windows 10 2004+, x64 / ARM64 | Ling, OpenRouter, ZenMux 등 AI 서비스 키 필요. [windows/](windows/README.md) 참고 |
-| Linux | Ubuntu 22.04 / 24.04 데스크톱 | AI 서비스 키 필요. 화면 공유 시 회의록 창이 보임. [linux/](linux/README.md) 참고 |
-| Android | Android 10+ | AI 서비스 키 필요. 동영상·라이브 자막, 대면 통역. [android/](android/README.md) 참고 |
+| Windows | Windows 10 2004+, x64 / ARM64 | Ling, OpenRouter, ZenMux 등 AI 서비스 키 필요. [windows/](../../windows/README.md) 참고 |
+| Linux | Ubuntu 22.04 / 24.04 데스크톱 | AI 서비스 키 필요. 화면 공유 시 회의록 창이 보임. [linux/](../../linux/README.md) 참고 |
+| Android | Android 10+ | AI 서비스 키 필요. 동영상·라이브 자막, 대면 통역. [android/](../../android/README.md) 참고 |
 
 설치 파일은 [웹사이트 다운로드 페이지](https://cicada.indaloop.app/ko/download/)와 [Releases](https://github.com/wquguru/cicada/releases)에서 받을 수 있습니다. 네 플랫폼 모두 버전 번호와 회의 기록 형식을 공유하며, 아래 기능은 Mac 버전을 기준으로 설명합니다.
 
@@ -78,7 +78,7 @@ Mac에서는 "설정 › 동시통역"에서 "키 없이 말하기"를 켤 수�
 기능을 켜면 클릭 한 번으로 내려받아 설치하는 가상 드라이버 BlackHole 2ch로 시스템 마이크를 전환합니다. Ling API 키를 입력하면 자연스러운 음성을 쓰거나 8~30초 녹음으로 내 목소리를 복제할 수 있고, 입력하지 않아도 Mac 기본 음성을 쓸 수 있습니다. Windows와 Linux의 동시통역, Android의 대면 모드에서도 Ling API 키가 있으면 10~15초 녹음으로 내 목소리를 쓸 수 있습니다.
 
 <p align="center">
-  <img src="docs/interpreting.png" width="640" alt="오른쪽 Option 말하기 키, 대상 언어, Ming 음성 미리 듣기, macOS 음성이 표시된 동시통역 설정 화면">
+  <img src="../interpreting.png" width="640" alt="오른쪽 Option 말하기 키, 대상 언어, Ming 음성 미리 듣기, macOS 음성이 표시된 동시통역 설정 화면">
 </p>
 
 ### 회의 기록
@@ -90,7 +90,7 @@ Mac에서는 "설정 › 동시통역"에서 "키 없이 말하기"를 켤 수�
 "공유…"를 누르면 회의록 링크(선택 시 이중 언어 전문 포함)를 만들 수 있으며, 유효 기간과 비밀번호 설정을 지원합니다. 업로드 전에는 키나 미공개 회사 정보 같은 민감한 내용을 자동으로 차단합니다.
 
 <p align="center">
-  <img src="docs/records.png" width="640" alt="구분된 화자 이름과 문장별 영중 이중 언어 기록이 표시된 회의 기록 창">
+  <img src="../records.png" width="640" alt="구분된 화자 이름과 문장별 영중 이중 언어 기록이 표시된 회의 기록 창">
 </p>
 
 ## 개인정보 보호 및 권한
@@ -147,7 +147,7 @@ macOS 14.4 이상(Apple silicon 및 Intel 지원)이 필요합니다. Apple sili
 `Cicada-<버전>-macOS-AppleSilicon.dmg` 또는 `Cicada-<버전>-macOS-Intel.dmg`를 내려받아 응용 프로그램 폴더로 끌어다 놓으세요(`shasum -a 256 Cicada-*.dmg`로 검증 가능). Apple 서명과 공증을 받아 더블클릭하면 바로 열립니다. 초기 안내에 따라 권한을 켜고 샘플 회의를 들어보면 됩니다.
 
 <p align="center">
-  <img src="docs/onboarding.png" width="640" alt="2인 샘플 회의를 재생하며 실시간 이중 언어 자막을 보여주는 초기 안내 2단계">
+  <img src="../onboarding.png" width="640" alt="2인 샘플 회의를 재생하며 실시간 이중 언어 자막을 보여주는 초기 안내 2단계">
 </p>
 
 ### Windows
@@ -183,7 +183,7 @@ defaults delete com.wquguru.cicada
 
 ## 개발
 
-Mac 버전은 Xcode Command Line Tools(`xcode-select --install`)만 설치하면 되며 서드파티 의존성이 없습니다. macOS 27에서 `SwiftUIMacros` 누락 오류가 나면 전체 Xcode를 설치하고 `sudo xcode-select -s /Applications/Xcode.app`을 실행하세요. 다른 플랫폼 빌드는 [windows/README.md](windows/README.md), [linux/README.md](linux/README.md), [android/README.md](android/README.md)를 참고하세요.
+Mac 버전은 Xcode Command Line Tools(`xcode-select --install`)만 설치하면 되며 서드파티 의존성이 없습니다. macOS 27에서 `SwiftUIMacros` 누락 오류가 나면 전체 Xcode를 설치하고 `sudo xcode-select -s /Applications/Xcode.app`을 실행하세요. 다른 플랫폼 빌드는 [windows/README.md](../../windows/README.md), [linux/README.md](../../linux/README.md), [android/README.md](../../android/README.md)를 참고하세요.
 
 ```bash
 scripts/build.sh            # 개발 버전 빌드 → build/Cicada.app (이름은 Cicada Dev, 정식 버전과 동시 실행 가능)
