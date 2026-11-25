@@ -56,30 +56,79 @@ class Source:
 
 
 class _SoundcardSource(Source):
+    """Follows Windows' default device: bound once at start, a session went on hearing the laptop speakers
+    after the sound had moved to a headset, and ended with no lines. The default is looked up every
+    `check_every` seconds (about 1 ms) and the recorder reopened on the new one; a device that vanishes
+    (headset unplugged) gets `retries` tries at the default Windows picks next."""
+    check_every = 1.0
+    retries = 3
+    retry_wait = 1.0  # Windows takes a moment to name the next default
+
+    def __init__(self, on_audio):
+        super().__init__(on_audio)
+        self.on_device = lambda name, switched: None  # the device now heard, and whether it changed
+
+    def _default_id(self) -> str:
+        raise NotImplementedError
+
     def _device(self):
         raise NotImplementedError
 
     def _run(self) -> None:
+        import ctypes
+        import sys
+        import soundcard  # noqa: F401 -- first: its import joins COM itself and fails if already joined (S_FALSE)
+        # soundcard joins COM only in the thread that imports it: once that thread had ended, the next
+        # session's thread failed with 0x800401f0 (system audio, stop, then the mic). Each thread joins itself.
+        com = sys.platform == "win32" and ctypes.windll.ole32.CoInitializeEx(None, 0) in (0, 1)  # MTA, as soundcard
+        try:
+            self._listen()
+        finally:
+            if com:
+                ctypes.windll.ole32.CoUninitialize()
+
+    def _listen(self) -> None:
         import warnings
         import soundcard
 
-        # pythoncom-free COM init: soundcard does it per thread itself.
-        mic = self._device()
         warnings.filterwarnings("ignore", category=soundcard.SoundcardRuntimeWarning)
-        with mic.recorder(samplerate=CAPTURE_RATE, blocksize=BLOCK) as rec:
-            while not self._stop.is_set():
-                self.on_audio(to_pcm16(rec.record(numframes=BLOCK)))
+        heard, failures = None, 0
+        while not self._stop.is_set():
+            try:
+                mic = self._device()
+                with mic.recorder(samplerate=CAPTURE_RATE, blocksize=BLOCK) as rec:
+                    self.on_device(mic.name, heard is not None and heard != mic.id)
+                    heard, failures = mic.id, 0
+                    checked = time.monotonic()
+                    while not self._stop.is_set():
+                        self.on_audio(to_pcm16(rec.record(numframes=BLOCK)))
+                        if time.monotonic() - checked >= self.check_every:
+                            checked = time.monotonic()
+                            if self._default_id() != heard:
+                                break  # the user switched outputs: reopen on the new default
+            except Exception:
+                failures += 1
+                if failures >= self.retries:
+                    raise
+                self._stop.wait(self.retry_wait)
 
 
 class SystemAudio(_SoundcardSource):
     """What the speakers or headphones play, any app."""
+    def _default_id(self) -> str:
+        import soundcard
+        return soundcard.default_speaker().id
+
     def _device(self):
         import soundcard
-        speaker = soundcard.default_speaker()
-        return soundcard.get_microphone(id=str(speaker.name), include_loopback=True)
+        return soundcard.get_microphone(id=self._default_id(), include_loopback=True)
 
 
 class Microphone(_SoundcardSource):
+    def _default_id(self) -> str:
+        import soundcard
+        return soundcard.default_microphone().id
+
     def _device(self):
         import soundcard
         return soundcard.default_microphone()

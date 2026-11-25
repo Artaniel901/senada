@@ -107,11 +107,16 @@ class LiveSession:
             self._source = capture.WavFile(self._audio, self.wav_path or "", self.wav_speed)
         else:
             raise ValueError(f"unknown source {self.kind}")
+        if hasattr(self._source, "on_device"):
+            self._source.on_device = lambda name, switched: self._emit(
+                {"type": "device", "sid": self.sid, "name": name, "switched": switched})
         self._worker = threading.Thread(target=self._work, name="live-worker", daemon=True)
         self._worker.start()
+        self._finisher = threading.Thread(target=self._finishing, name="live-finisher", daemon=True)
+        self._finisher.start()
+        self._emit({"type": "started", "sid": self.sid, "source": self.kind})  # before the source names its device
         self._source.start()
         threading.Thread(target=self._watch, name="live-watch", daemon=True).start()
-        self._emit({"type": "started", "sid": self.sid, "source": self.kind})
         return self.sid
 
     def stop(self, wait: float = 30.0) -> None:

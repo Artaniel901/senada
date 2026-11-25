@@ -285,6 +285,8 @@ class Api:
         return self._settings.get("liveTopic"), self._settings.get("words")
 
     def _live_event(self, event: dict) -> None:
+        if event.get("type") == "device":
+            log(f"live device {'switched to ' if event.get('switched') else ''}{event.get('name')}")
         if event.get("type") in ("error", "file-done"):
             if event.get("type") == "error":
                 log("live: " + event.get("message", ""))
