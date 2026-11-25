@@ -29,6 +29,9 @@
 
 <p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></p>
 
+> [!WARNING]
+> **공지**: Cicada는 어떤 암호화폐, 토큰, NFT와도 관련이 없습니다. 코인을 발행한 적이 없고 앞으로도 발행하지 않습니다.
+
 회의를 하거나 라이브 방송을 볼 때, Cicada는 실시간으로 이중 언어 자막을 보여주고 들으면서 체계적인 회의록을 작성합니다. 발언 차례가 되면 말하기 키(Mac은 오른쪽 `⌥`, Windows는 오른쪽 `Ctrl`, 변경 가능)를 누른 채 말하면 상대방이 회의에서 바로 번역된 음성을 듣습니다. Cicada는 시스템 소리를 직접 읽기 때문에 회의에 봇을 넣지 않아 상대방은 전혀 눈치채지 못합니다. Apple silicon Mac에서는 인식이 모두 기기 안에서 이루어져 소리가 컴퓨터 밖으로 나가지 않습니다.
 
 **사용 가능한 곳**: 컴퓨터에서 소리가 나는 모든 곳에서 쓸 수 있습니다. Tencent Meeting, Feishu, DingTalk, WeCom, Zoom, Teams, Google Meet, Webex, Discord, Telegram 음성 채팅은 물론 X Spaces, YouTube, Twitch, Bilibili 라이브, 팟캐스트 및 웹페이지도 지원합니다. 스마트폰에서는 시스템에서 통화 및 회의 앱 소리 녹음을 허용하지 않으므로, 스피커폰을 켜고 '대면' 모드를 사용하면 됩니다.

@@ -25,6 +25,7 @@
   "sub": "알아듣고, 말하고, 기록합니다",
   "dl_mac": "Mac용 다운로드",
   "view_source": "소스 보기",
+  "crypto_notice": "Cicada는 어떤 암호화폐, 토큰, NFT와도 관련이 없습니다. 코인을 발행한 적이 없고 앞으로도 발행하지 않습니다.",
   "hero_trust": "만든 사람 {{X_LINK}} · 소스 코드와 설치 파일은 GitHub에 공개",
   "version": "버전",
   "whats_new": "새로운 기능",

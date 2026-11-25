@@ -29,6 +29,9 @@
 
 <p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></p>
 
+> [!WARNING]
+> **お知らせ**: Cicada はいかなる暗号資産・トークン・NFT とも無関係です。コインを発行したことはなく、今後も発行しません。
+
 会議やライブ配信の間、Cicada はリアルタイムの二か国語字幕を出しながら、構造化された議事メモを書き進めます。発言するときは、話すキー（Mac は右の `⌥`、Windows は右の `Ctrl`、変更可）を押したまま話せば、翻訳された音声がそのまま会議の相手に届きます。システムの音声を直接読み取るため、会議にボットを入れる必要はなく、相手には気づかれません。Apple シリコンの Mac ではすべて端末内で認識するため、音声が外に出ることはありません。
 
 **使える場所**：パソコンから音が出るものなら何でも使えます。Tencent Meeting、Feishu、DingTalk、WeCom、Zoom、Teams、Google Meet、Webex、Discord、Telegram の音声通話、X スペース、YouTube、Twitch、Bilibili Live、ポッドキャスト、ブラウザなどに対応しています。スマートフォンでは、OS の制限により通話や会議アプリの音声を録音できないため、スピーカーフォンにして「対面」モードをお使いください。

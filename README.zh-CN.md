@@ -29,6 +29,9 @@
 
 <p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a></p>
 
+> [!WARNING]
+> **声明**: 知了与任何加密货币、代币或 NFT 无关，从未发行、也不会发行任何币。
+
 开会或看直播时，知了实时给双语字幕，边听边写结构化纪要。轮到你发言，按住说话键（Mac 右 `⌥`，Windows 右 `Ctrl`，没有右 Ctrl 可在设置里换）开口，对方直接在会里听到译文语音。知了直接听系统声音，不往会里塞机器人，对方完全无感。在 Apple 芯片的 Mac 上全部本机识别，声音不出电脑。
 
 **能在哪里用**：电脑能出声的地方都行——腾讯会议、飞书、钉钉、企业微信、Zoom、Teams、Google Meet、Webex、Discord、Telegram 语音，还有 X Spaces、YouTube、Twitch、B 站直播、播客和网页。手机上系统不让录通话和会议 app 的声音，开外放用“面对面”就行。
