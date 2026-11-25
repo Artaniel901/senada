@@ -57,7 +57,7 @@ struct PhoneRoot: View {
 
     private var barShown: Bool {
         switch model.tab {
-        case .records: model.selection == nil && !model.room.isRunning
+        case .records: model.selection == nil && (!model.room.isRunning || model.liveHidden)
         case .settings: true
         case .search: model.searchPath.isEmpty
         }

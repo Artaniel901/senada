@@ -11,6 +11,8 @@ struct HomeTitle: View {
     var logo: CGFloat = 52
     var titleSize: CGFloat = 28
     var trailing: AnyView? = nil
+    /// What stands at the right while listening (the iPhone's 收起).
+    var liveTrailing: AnyView? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -19,14 +21,16 @@ struct HomeTitle: View {
                 if room.isRunning {
                     TimelineView(.periodic(from: .now, by: 1)) { _ in
                         HStack(spacing: 6) {
-                            LiveDot()
-                            Text(L("正在听 · \(TranscriptExport.clock(room.elapsed))"))
+                            if room.paused { Circle().fill(Ink.secondary).frame(width: 8, height: 8) } else { LiveDot() }
+                            Text(room.paused ? L("已暂停") : L("正在听 · \(TranscriptExport.clock(room.elapsed))"))
                         }
                         .font(.footnote.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(Ink.accentText)
+                        .foregroundStyle(room.paused ? Ink.secondary : Ink.accentText)
                     }
                     let pair = Pref.pairText(room.languagePair.source, room.languagePair.target)
-                    Text(room.speakerMode ? L("外放 · \(pair)") : L("会议室 · \(pair)"))
+                    // Same language both sides (Chinese heard, Chinese shown): no pair to name.
+                    Text(pair.isEmpty ? (room.speakerMode ? L("外放") : L("会议室"))
+                         : (room.speakerMode ? L("外放 · \(pair)") : L("会议室 · \(pair)")))
                         .font(.system(size: titleSize - 4, weight: .bold)).foregroundStyle(Ink.ink)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 } else {
@@ -38,6 +42,7 @@ struct HomeTitle: View {
             }
             Spacer(minLength: 0)
             if let trailing, !room.isRunning { trailing }
+            if let liveTrailing, room.isRunning { liveTrailing }
         }
         .padding(.horizontal, 4)
     }
@@ -125,11 +130,32 @@ struct ListenBar: View {
 
     private var live: some View {
         Group {
-            Wave(level: room.level).padding(.leading, 16)
-            let people = room.speakerCount
-            Text(people >= 2 ? L("\(people) 人在说") : (room.status.isEmpty ? L("正在听") : room.status))
-                .font(.subheadline).foregroundStyle(Ink.secondary).lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            // 收起 left the meetings on screen: the wave and who is talking bring 正在听 back.
+            Button { model.liveHidden = false } label: {
+                HStack(spacing: 10) {
+                    Wave(level: room.level)
+                    let people = room.speakerCount
+                    Text(people >= 2 ? L("\(people) 人在说") : (room.status.isEmpty ? L("正在听") : room.status))
+                        .font(.subheadline).foregroundStyle(Ink.secondary).lineLimit(1)
+                    if model.liveHidden {
+                        Image(systemName: "chevron.up").font(.footnote.weight(.semibold)).foregroundStyle(Ink.secondary)
+                    }
+                }
+                .padding(.leading, 16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!model.liveHidden)
+            Button { room.setPaused(!room.paused) } label: {
+                Image(systemName: room.paused ? "play.fill" : "pause.fill")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Ink.ink)
+                    .frame(width: 46, height: 46)
+                    .background(Ink.ground, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(room.paused ? Text("继续") : Text("暂停"))
             Button { model.stopListening() } label: {
                 Text("结束").font(.headline).foregroundStyle(.white)
                     .padding(.horizontal, 20).frame(height: 46)
@@ -177,7 +203,10 @@ struct LivePhone: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
-                HomeTitle()
+                HomeTitle(liveTrailing: AnyView(
+                    Button { model.liveHidden = true } label: { GlassIcon(systemName: "chevron.down") }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text("收起"))))
                 ListenBar()
                 PillSwitch(selection: $model.livePage, options: [(.notes, notesTitle), (.subtitles, "字幕")])
                 EndingStrip()

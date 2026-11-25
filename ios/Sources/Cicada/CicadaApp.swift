@@ -190,6 +190,8 @@ final class AppModel: ObservableObject {
     var endTimesOverride: (Double, Double)?
     /// 正在听's 字幕 / 纪要 switch, so a debug command can flip it.
     @Published var livePage: LivePage = .subtitles
+    /// 收起 on the iPhone's 正在听: the meetings again while listening goes on; the bar brings it back.
+    @Published var liveHidden = false
     /// The record page's picked speaker (scheme A: only they are drawn in ink).
     @Published var focusSpeaker: Int?
     @Published var tab: AppTab = .records
@@ -257,6 +259,7 @@ final class AppModel: ObservableObject {
     func startListening() {
         guard !room.isRunning else { return }
         selection = nil
+        liveHidden = false
         searchPath = []
         tab = .records
         // 纪要 first, as the Mac's notes window; without a key there are none, so 字幕.

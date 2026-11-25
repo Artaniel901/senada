@@ -63,6 +63,12 @@ extension AppModel {
             debugLog("window: \(arg) \(devWindow.map { "\($0)" } ?? "screen")")
         case "stop":
             stopListening()
+        case "pause":
+            // pause:on|off, the bar's 暂停 / 继续
+            room.setPaused(arg != "off")
+        case "liveHidden":
+            // liveHidden:on|off, 正在听's 收起 / tapping the bar
+            liveHidden = arg != "off"
         case "welcome":
             // welcome:<0|1|2> opens 第一次打开 at that step; welcome:done closes it as 开始用知了 does
             if arg == "done" { finishWelcome() } else { welcomeStep = Int(arg) ?? 0; showWelcome = true }

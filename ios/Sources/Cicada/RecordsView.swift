@@ -9,7 +9,7 @@ struct RecordsSplit: View {
     @ObservedObject var store: SessionStore
 
     var body: some View {
-        if room.isRunning {
+        if room.isRunning && !model.liveHidden {
             LivePhone()
         } else {
             records
