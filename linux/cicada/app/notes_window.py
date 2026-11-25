@@ -511,9 +511,10 @@ class NotesWindow(Gtk.Window):
         # (it follows what's said), else where the reader was.
         if target is not None and scroll:
             def to_match():
-                ok, _x, y = target.translate_coordinates(box, 0, 0)
-                if ok:
-                    adj.set_value(max(0, y - adj.get_page_size() / 3))
+                # PyGObject gives (x, y), or None when they share no toplevel.
+                pos = target.translate_coordinates(box, 0, 0)
+                if pos is not None:
+                    adj.set_value(max(0, pos[1] - adj.get_page_size() / 3))
             self._after_layout = to_match
         elif not terms and self.app.listen.listening:
             self._after_layout = lambda: adj.set_value(adj.get_upper())
