@@ -110,6 +110,7 @@ final class FixPrefs: FixSwitches {
 final class AppModel: ObservableObject {
     @Published var store = SessionStore()
     let ling = LingClient()
+    let diagnostics = Diagnostics()
     lazy var notes = NotesEngine(ling: ling, store: store)
     lazy var translator: TranslationService = {
         let t = TranslationService(ling: ling)
@@ -329,6 +330,12 @@ final class AppModel: ObservableObject {
     /// word list's known forms are fixed as soon as a line is written. As the Mac's AppModel.
     func wireFixes() {
         translator.fixContext = { [weak self] text in self?.fixes.context(for: text) }
+        // 复制诊断信息 (设置): the Mac's recorder, in memory only. Timings and counts, never text.
+        diagnostics.enabled = { true }
+        ling.onCall = { [weak self] in self?.diagnostics.record($0) }
+        translator.onDraft = { [weak self] in self?.diagnostics.recordDraft(seconds: $0, ok: $1) }
+        room.onTiming = { [weak self] in self?.diagnostics.record($0) }
+        room.onMeeting = { [weak self] began in if began { self?.diagnostics.begin() } else { self?.diagnostics.end() } }
         translator.onFixes = { [weak self] text, edits in self?.fixes.received(text, edits) }
         room.onHeard = { [weak self] session, line in self?.fixes.applyKnown(lineID: line, in: session) }
     }
@@ -450,5 +457,18 @@ final class AppModel: ObservableObject {
               let cmd = URLComponents(url: url, resolvingAgainstBaseURL: false)?
                 .queryItems?.first(where: { $0.name == "cmd" })?.value else { return }
         debugCommand(cmd)
+    }
+}
+
+extension AppModel {
+    /// 复制诊断信息: the Mac's numbers, with the phone and system they came from. Safe to paste anywhere.
+    var diagnosticsReport: String {
+        var sys = utsname()
+        uname(&sys)
+        let model = withUnsafeBytes(of: &sys.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        return diagnostics.report(version: "\(version) (\(build))", service: AIPrefs.config)
+            + "\n\(model) · iOS \(UIDevice.current.systemVersion) · \(DeviceLoad.line)"
     }
 }

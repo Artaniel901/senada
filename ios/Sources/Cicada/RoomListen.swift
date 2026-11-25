@@ -66,6 +66,12 @@ final class RoomListen: ObservableObject {
     static var silent = false
     private var silentClock = 0.0
     var onStateChange: (() -> Void)?
+    /// A meeting began (true) or closed (false), for the diagnostics.
+    var onMeeting: ((Bool) -> Void)?
+    /// Each finished sentence's timings (never its text), for 复制诊断信息.
+    var onTiming: ((SentenceTiming) -> Void)?
+    /// Line id → when its words were final and how long recognizing took after the last word.
+    private var finalTiming: [String: (at: Date, recognize: Double)] = [:]
 
     private let store: SessionStore
     private let translator: TranslationService
@@ -261,6 +267,7 @@ final class RoomListen: ObservableObject {
             }
             read(stream)
             status = ""
+            onMeeting?(true)
             if speakerMode { watchSilence(s.id) }
             if !settled { watchLanguage() }
             debugLog("room: listening locale=\(lang.locale) target=\(target) speaker=\(speakerMode) format=\(stream.format) session=\(s.id)")
@@ -548,6 +555,7 @@ final class RoomListen: ObservableObject {
             store.end(at: endedAt, heardSpeech: heardVoice)
             if let ended, store.session(ended) != nil { onEnded?(ended) }
             debugLog("room: stopped lines=\(lines.count)")
+            onMeeting?(false)
             sessionID = nil
             startedAt = nil
             level = 0
@@ -639,6 +647,7 @@ final class RoomListen: ObservableObject {
         let joined = HeardText.join(prev.src, final)
         last = (prev.id, joined, piece.end)
         emitted(piece, final, line: prev.id)
+        finalTiming[prev.id] = (Date(), max(0, audio.fedSeconds - piece.end))
         store.setSource(lineID: prev.id, joined)
         if let i = lines.firstIndex(where: { $0.id == prev.id }) { lines[i].src = joined }
         if let sid = sessionID { onHeard?(sid, prev.id) }
@@ -658,6 +667,7 @@ final class RoomListen: ObservableObject {
         if lines.count > 60 { lines.removeFirst(lines.count - 60) }
         last = (id, final, piece.end)
         emitted(piece, final, line: id)
+        finalTiming[id] = (Date(), max(0, audio.fedSeconds - piece.end))
         translate(id, final)
         return id
     }
@@ -762,8 +772,15 @@ final class RoomListen: ObservableObject {
     /// little later, twice at most, as the Mac does.
     private func translate(_ id: String, _ text: String, retry: Int = 0) {
         let source = lang.code, target = self.target
+        let trace = TranslateTrace(), asked = Date()
         Task {
-            guard let out = await translator.translate(text, source: source, target: target, kind: .sentence) else {
+            let result = await translator.translate(text, source: source, target: target, kind: .sentence, trace: trace)
+            if let timing = finalTiming.removeValue(forKey: id), !trace.attempts.isEmpty {
+                onTiming?(SentenceTiming(at: timing.at, side: "them", chars: text.count, recognize: timing.recognize,
+                                         queue: trace.lingQueue, translate: Date().timeIntervalSince(asked), voice: nil,
+                                         failed: trace.failedSeconds, via: result == nil ? "none" : trace.via, fallbacks: trace.fallbacks))
+            }
+            guard let out = result else {
                 debugLog("room: translation failed, try \(retry + 1)")
                 guard retry < 2 else { return }
                 try? await Task.sleep(nanoseconds: UInt64(retry == 0 ? 10 : 20) * 1_000_000_000)

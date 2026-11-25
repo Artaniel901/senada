@@ -8,6 +8,7 @@ struct SettingsView: View {
     @EnvironmentObject var model: AppModel
     @EnvironmentObject var ling: LingClient
     @Environment(\.dismiss) private var dismiss
+    @State private var copiedDiagnostics = false
     @AppStorage(Pref.model) private var aiModel = LingClient.models[0]
     @AppStorage(Pref.target) private var target = "system"
     @AppStorage(Pref.voices) private var voices = true
@@ -162,6 +163,16 @@ struct SettingsView: View {
                         .font(.footnote).foregroundStyle(Ink.tertiary)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 28)
+                    // For a bug report: numbers only (timings, counts, the service and model), never what was said.
+                    Button {
+                        UIPasteboard.general.string = model.diagnosticsReport
+                        copiedDiagnostics = true
+                    } label: {
+                        Text(copiedDiagnostics ? L("已复制") : L("复制诊断信息")).font(.footnote.weight(.semibold))
+                            .foregroundStyle(Ink.secondary).frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 120)
