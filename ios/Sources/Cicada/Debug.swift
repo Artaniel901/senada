@@ -182,6 +182,12 @@ extension AppModel {
             // A meeting without the microphone or the recognizer, fed lines by `heard:`.
             RoomListen.silent = arg != "off"
         case "heard": room.debugHeard(arg)
+        case "modelFail":
+            // modelFail:<offline|disk|limit|other>: the next speech model download fails that way, as on the Mac.
+            RoomListen.simulatedModelFailure = arg.isEmpty ? nil : arg
+        case "startRetry":
+            // 再试一次 on the card under 开始听.
+            room.retry()
         case "aiCustomOnly":
             // aiCustomOnly:on|off, 语音和文字只发给你的服务, as on the Mac.
             UserDefaults.standard.set(arg == "on", forKey: AIPrefs.customOnly)
@@ -403,6 +409,7 @@ extension AppModel {
             debugLog("import busy=\(importer.busy) phase=\(importer.phase) progress=\(String(format: "%.2f", importer.progress)) queue=\(importer.queue.count) current=\(importer.current?.id ?? "-")")
         case "state":
             debugLog("memory \(DeviceLoad.line)")
+            debugLog("room problem=\(room.problem.map { "\($0)" } ?? "-") downloading=\(room.downloading?.name ?? "-")")
             debugLog("room running=\(room.isRunning) lines=\(room.lines.count) draft=\(room.draft.count) level=\(room.level) status=\(room.status) speaker=\(room.speakerMode) paused=\(room.paused) pip=\(pip.isActive) session=\(room.sessionID ?? "-")")
             debugLog("state tab=\(tab.rawValue) selection=\(selection ?? "-") page=\(recordPage) sessions=\(store.sessions.count) query=\(query) notesLang=\(notesLanguageCode(selection ?? store.sessions.first?.id ?? "")) undo=\(speakerUndo?.text ?? "-")")
         default:

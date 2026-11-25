@@ -33,3 +33,4 @@ Sources/Cicada/NotesEditing.swift
 Sources/Cicada/SpeakerEnrollment.swift
 Sources/Cicada/HandsFree.swift
 Sources/Cicada/TranscriptSearch.swift
+Sources/Cicada/ModelProblem.swift

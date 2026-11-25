@@ -181,6 +181,7 @@ struct LivePhone: View {
                 ListenBar()
                 PillSwitch(selection: $model.livePage, options: [(.notes, notesTitle), (.subtitles, "字幕")])
                 EndingStrip()
+                ModelWaitCard()
                 TranslateDownCard()
                 if let id = room.sessionID { FixAskCard(fixes: model.fixes, session: id) }
             }
@@ -344,6 +345,7 @@ struct LivePad: View {
     var body: some View {
         VStack(spacing: 0) {
             EndingStrip().frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
+            ModelWaitCard().frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
             TranslateDownCard().frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
             if let id = room.sessionID {
                 FixAskCard(fixes: model.fixes, session: id).frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
@@ -390,5 +392,98 @@ struct LivePad: View {
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A speech model on its way: the system says only "not yet" or "done", so a moving bar and the time
+/// waited show it is still coming (the Mac's download card).
+struct ModelWaitCard: View {
+    @EnvironmentObject var room: RoomListen
+
+    var body: some View {
+        if let d = room.downloading {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    ProgressView().tint(Ink.tertiary)
+                    Text(L("正在下载 \(d.name) 语音模型")).font(.subheadline.weight(.semibold)).foregroundStyle(Ink.ink)
+                }
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let s = max(0, Int(context.date.timeIntervalSince(d.since)))
+                    Text(L("约 140 MB · 已等 \(String(format: "%d:%02d", s / 60, s % 60))"))
+                        .font(.footnote).foregroundStyle(Ink.secondary).monospacedDigit()
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+}
+
+/// Under 开始听 when it didn't start: why, and the one thing that helps (the Mac's 听不出 card for a
+/// speech model; the microphone permission; anything else, 再试一次).
+struct StartProblemCard: View {
+    @EnvironmentObject var room: RoomListen
+
+    var body: some View {
+        if !room.isRunning, let p = room.problem {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Ink.accent).padding(.top, 2)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(title(p)).font(.subheadline.weight(.semibold)).foregroundStyle(Ink.ink)
+                        if let r = reason(p) {
+                            Text(r).font(.footnote).foregroundStyle(Ink.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    Button { room.dismissProblem() } label: {
+                        Image(systemName: "xmark").font(.footnote.weight(.semibold)).foregroundStyle(Ink.tertiary)
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain).accessibilityLabel(Text("关闭"))
+                }
+                if let (label, act) = action(p) {
+                    Button(action: act) {
+                        Text(label).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                            .padding(.horizontal, 16).frame(minHeight: 36)
+                            .background(Ink.ink, in: Capsule())
+                    }
+                    .buttonStyle(.plain).padding(.leading, 28)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+
+    private func title(_ p: RoomListen.StartProblem) -> String {
+        switch p {
+        case .microphone: L("请在设置里允许知了使用麦克风")
+        case .model(let m): L("没能下载 \(m.lang.name) 语音模型")
+        case .other(let message): message
+        }
+    }
+
+    private func reason(_ p: RoomListen.StartProblem) -> String? {
+        guard case .model(let m) = p else { return nil }
+        switch m.cause {
+        case .offline: return L("网络连不上，连上后会自动继续")
+        case .disk: return L("这台手机的存储空间不够了")
+        case .limit: return L("这台手机上的语音模型已满 5 种")
+        case .dictation(let message), .other(let message?): return message
+        case .other(nil): return nil
+        }
+    }
+
+    private func action(_ p: RoomListen.StartProblem) -> (String, () -> Void)? {
+        let settings = { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
+        switch p {
+        case .microphone: return (L("打开 iPhone 设置"), settings)
+        case .model(let m) where m.cause == .disk: return (L("打开 iPhone 设置"), settings)
+        case .model(let m) where m.cause == .offline: return nil
+        default: return (L("再试一次"), { room.retry() })
+        }
     }
 }

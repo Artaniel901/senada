@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Network
 
 /// 听会议室 on iPhone and iPad: the microphone → the shared recognizer (`Recognition`) → the shared
 /// translation chain → the meeting record, with live notes from the shared `NotesEngine`. The Mac's
@@ -35,6 +36,24 @@ final class RoomListen: ObservableObject {
     @Published private(set) var paused = false
     /// The pause is the user's (暂停): an interruption ending doesn't end it.
     private var userPaused = false
+
+    /// Why 开始听 didn't start, shown under it: listening has stopped, so the live screen (where
+    /// `status` goes) is gone and a bare status would never be seen.
+    enum StartProblem: Equatable {
+        case microphone
+        /// A speech model that couldn't be had (the Mac's `ModelProblem`, its causes and words).
+        case model(ModelProblem)
+        case other(String)
+    }
+    @Published private(set) var problem: StartProblem?
+    /// A speech model on its way since then (约 140 MB · 已等 …).
+    @Published private(set) var downloading: (name: String, since: Date)?
+    /// Debug (`modelFail:<offline|disk|limit|other>`): the next model download fails that way.
+    static var simulatedModelFailure: String?
+    /// How the last 开始听 was asked, for 再试一次 and the network coming back.
+    private var lastStart: (source: String, target: String, voices: Bool, speaker: Bool)?
+    private let path = NWPathMonitor()
+    private var online = true
 
     /// Every finished line, for the Live Activity.
     var onLine: ((Line) -> Void)?
@@ -101,7 +120,28 @@ final class RoomListen: ObservableObject {
             if let i = self.lines.firstIndex(where: { $0.id == lineID }) { self.lines[i].voice = voice }
             debugLog("voice profiles: heard \(match.profile.name) (\(String(format: "%.2f", match.similarity)))")
         }
+        // A download that failed for want of a network starts again once there is one (as on the Mac).
+        path.pathUpdateHandler = { [weak self] p in
+            let up = p.status == .satisfied
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, up != self.online else { return }
+                    self.online = up
+                    if up, case .model(let m)? = self.problem, m.cause == .offline { self.retry() }
+                }
+            }
+        }
+        path.start(queue: .global(qos: .utility))
     }
+
+    /// 再试一次: 开始听 again as it was asked.
+    func retry() {
+        guard !isRunning, let s = lastStart else { return }
+        debugLog("room: start again after \(String(describing: problem))")
+        start(source: s.source, target: s.target, voices: s.voices, speaker: s.speaker)
+    }
+
+    func dismissProblem() { problem = nil }
 
     /// 记住的人 (PeoplePage.swift): voices remembered by voiceprint, matched while listening.
     var profiles: SpeakerProfileStore? { didSet { speakers.profiles = profiles } }
@@ -117,6 +157,8 @@ final class RoomListen: ObservableObject {
 
     func start(source: String, target: String, voices: Bool, speaker: Bool = false) {
         guard !isRunning else { return }
+        lastStart = (source, target, voices, speaker)
+        problem = nil
         speakerMode = speaker
         paused = false
         userPaused = false
@@ -154,6 +196,7 @@ final class RoomListen: ObservableObject {
             return
         }
         guard await AVAudioApplication.requestRecordPermission() else {
+            problem = .microphone
             fail(L("请在设置里允许知了使用麦克风"))
             return
         }
@@ -171,8 +214,7 @@ final class RoomListen: ObservableObject {
                 debugLog("room: auto candidates=\(candidates.map(\.locale)) start=\(lang.locale)")
             }
             if await Recognition.status(lang.locale) != .installed {
-                status = L("正在下载 \(lang.name) 语音模型…")
-                try await Recognition.install(lang.locale)
+                try await fetch(lang)
             }
             let stream = try await Recognition.start(lang.locale, drafts: true, confidence: true)
             guard isRunning else { await stream.cancel(); return }
@@ -207,9 +249,14 @@ final class RoomListen: ObservableObject {
             if !settled { watchLanguage() }
             debugLog("room: listening locale=\(lang.locale) target=\(target) speaker=\(speakerMode) format=\(stream.format) session=\(s.id)")
             onStateChange?()
+        } catch let failure as ModelFailure {
+            problem = .model(failure.problem)
+            fail(L("没能下载 \(lang.name) 语音模型"))
         } catch {
             debugLog("room: start failed: \(error)")
-            fail(Recognition.needsUser(error) ? error.localizedDescription : L("没能下载 \(lang.name) 语音模型"))
+            let message = Recognition.needsUser(error) ? error.localizedDescription : L("没能开始听，再试一次")
+            problem = .other(message)
+            fail(message)
         }
     }
 
@@ -241,8 +288,7 @@ final class RoomListen: ObservableObject {
         var out: [Lang] = []
         for lang in likely {
             if await Recognition.status(lang.locale) != .installed {
-                status = L("正在下载 \(lang.name) 语音模型…")
-                do { try await Recognition.install(lang.locale) } catch {
+                do { try await fetch(lang) } catch {
                     debugLog("room: auto can't fetch \(lang.locale): \(error)")
                     continue
                 }
@@ -401,6 +447,50 @@ final class RoomListen: ObservableObject {
 
     /// Debug (`interrupt:began|ended`): what the system sends for a call or Siri.
     func debugInterrupt(_ began: Bool) { audio.debugInterrupt(began) }
+
+    /// A speech model that couldn't be had, as the start's error: the card under 开始听 says why.
+    struct ModelFailure: Error { let problem: ModelProblem }
+
+    /// Downloads `lang`'s speech model. At the five-model limit one this app isn't using (and isn't a
+    /// likely language) is given back and the download tried once more, as on the Mac.
+    private func fetch(_ lang: Lang) async throws {
+        status = L("正在下载 \(lang.name) 语音模型…")
+        downloading = (lang.name, Date())
+        defer { downloading = nil }
+        var freed = false
+        while true {
+            let simulated = Self.simulatedModelFailure
+            do {
+                if let simulated {
+                    Self.simulatedModelFailure = nil
+                    try await Task.sleep(nanoseconds: 1_500_000_000)
+                    throw ModelProblem.simulated(simulated)
+                }
+                try await Recognition.install(lang.locale)
+                return
+            } catch {
+                let cause = ModelProblem.cause(of: error, online: online, freeBytes: ModelProblem.freeBytes())
+                debugLog("room: model problem \(lang.locale): \(cause)")
+                if cause == .limit, simulated == nil, !freed, await freeModelSlot(for: lang) {
+                    freed = true
+                    continue
+                }
+                throw ModelFailure(problem: ModelProblem(lang: lang, cause: cause, picked: true))
+            }
+        }
+    }
+
+    private func freeModelSlot(for wanted: Lang) async -> Bool {
+        let keep = Set(likelySourceLanguages(last: UserDefaults.standard.string(forKey: Pref.lastDetected),
+                                             systemLanguages: Locale.preferredLanguages).map(\.locale) + [wanted.locale, lang.locale])
+        for locale in await Recognition.reservedLocales() where !keep.contains(locale) {
+            if await Recognition.release(locale) {
+                debugLog("room: model limit, gave back \(locale) for \(wanted.locale)")
+                return true
+            }
+        }
+        return false
+    }
 
     private func fail(_ message: String) {
         status = message

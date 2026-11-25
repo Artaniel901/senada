@@ -26,6 +26,7 @@ struct RecordsSplit: View {
                     .padding(.top, 6)
                     VStack(spacing: 10) {
                         ListenBar()
+                        StartProblemCard()
                         if !room.isRunning { FaceRow(face: model.face) }
                     }
                     .padding(.top, 16)
@@ -108,6 +109,7 @@ struct PadRoot: View {
             .padding(.horizontal, 4)
             VStack(spacing: 8) {
                 ListenBar(onGlass: true)
+                StartProblemCard()
                 if !room.isRunning { FaceRow(face: model.face, onGlass: true) }
             }
             .padding(.top, 14).padding(.bottom, 12)

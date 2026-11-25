@@ -1172,6 +1172,9 @@
 "网络连不上，连上后会自动继续" = "No internet. It carries on once you're back online";
 "这台 Mac 的磁盘空间不够了" = "This Mac is low on disk space";
 "这台 Mac 上的语音模型已满 5 种" = "This Mac already holds the most speech models it allows (5)";
+"这台手机的存储空间不够了" = "This phone is low on storage";
+"这台手机上的语音模型已满 5 种" = "This phone already holds the most speech models it allows (5)";
+"没能开始听，再试一次" = "Couldn't start listening. Try again";
 "打开存储空间" = "Open Storage";
 "打开听写设置" = "Open Dictation Settings";
 "先用已装的：" = "Use one already here:";
