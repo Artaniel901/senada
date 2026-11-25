@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Subtitle Cicada</title>
+<style>
+  /* The floating subtitle bar is the whole window: frameless, always on top, dragged anywhere. It is
+     solid rather than see-through because pywebview's transparent windows ignore `hidden` on Windows. */
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;
+    box-sizing: border-box; padding: 8px 26px; cursor: move; user-select: none;
+    background: #1d1a4a; color: #fff; text-align: center;
+    border: 3px solid #b8b3ff;
+    font-family: "Segoe UI Variable Text", "Segoe UI", "Malgun Gothic", "Yu Gothic UI", sans-serif;
+  }
+  .src { color: #cfcbff; font-size: calc(var(--size, 28px) * .58); line-height: 1.3; }
+  .dst { font-size: var(--size, 28px); line-height: 1.25; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .idle .dst { color: #cfcbff; font-weight: 400; font-size: 17px; }
+  #close {
+    position: fixed; top: 4px; right: 6px; width: 26px; height: 26px; border: 0; border-radius: 8px;
+    background: transparent; color: #cfcbff; font: 18px/1 sans-serif; cursor: pointer;
+  }
+  #close:hover, #close:focus-visible { background: #3a3577; color: #fff; outline: none; }
+</style>
+</head>
+<body class="pywebview-drag-region idle">
+  <button id="close" type="button" title="Tutup subtitle melayang" aria-label="Tutup subtitle melayang">×</button>
+  <div class="src" id="src"></div>
+  <div class="dst" id="dst">Subtitle muncul di sini saat Cicada mendengarkan. Seret untuk memindahkan.</div>
+<script>
+  'use strict';
+  let clearTimer = null;
+  window.cicadaEvent = (e) => {
+    if (e.type === 'overlay-style') document.body.style.setProperty('--size', `${e.size}px`);
+    if (e.type === 'line') {
+      document.body.classList.remove('idle');
+      document.getElementById('src').textContent = e.dst ? e.src : '';
+      document.getElementById('dst').textContent = e.dst || e.src;
+      clearTimeout(clearTimer);
+      clearTimer = setTimeout(() => { document.getElementById('src').textContent = ''; document.getElementById('dst').textContent = ''; }, 12000);
+    }
+  };
+  document.getElementById('close').addEventListener('click', () => window.pywebview.api.overlay(false));
+  window.addEventListener('pywebviewready', async () => {
+    const init = await window.pywebview.api.init();
+    document.body.style.setProperty('--size', `${init.settings.overlaySize}px`);
+  });
+</script>
+</body>
+</html>

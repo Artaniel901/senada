@@ -1,0 +1,10 @@
+# Cicada Offline engine and window. Versions pinned to the set tested on Windows 11 x64, Python 3.12.
+faster-whisper==1.2.1
+ctranslate2==4.9.1
+sentencepiece==0.2.3
+# faster-whisper 1.2.1 passes metadata_errors to av.open, which PyAV 19 removed.
+av==15.1.0
+SoundCard==0.4.6
+numpy==2.5.5
+pywebview==6.2.1
+pythonnet==3.2.1

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cicada Offline</title>
+<link rel="stylesheet" href="app.css">
+<script src="vendor/sakuga/button.js"></script>
+<script src="vendor/sakuga/tabs.js"></script>
+<script src="vendor/sakuga/toggle.js"></script>
+<script src="vendor/sakuga/progress.js"></script>
+<script src="vendor/sakuga/toast.js"></script>
+<script src="vendor/sakuga/tooltip.js"></script>
+<script src="vendor/sakuga/radio.js"></script>
+<script src="vendor/sakuga/slider.js"></script>
+<script src="vendor/sakuga/checkbox.js"></script>
+<script src="vendor/sakuga/input.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="pegs" aria-hidden="true"><i></i><i class="wide"></i><i></i></div>
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4c5 0 8 4 8 9v4l6 3c2 1 2 4 0 5l-6 3v2c0 4-4 7-8 7s-8-3-8-7v-2l-6-3c-2-1-2-4 0-5l6-3v-4c0-5 3-9 8-9z"/><path class="vein" d="M20 13v22M12 20l8 4 8-4"/></svg>
+    <div>
+      <h1>Cicada Offline</h1>
+      <p class="sub">Terjemahan di komputer ini. Tidak ada yang dikirim ke internet.</p>
+    </div>
+  </div>
+  <sakuga-tabs id="nav" label="Halaman">
+    <option value="text">Teks</option>
+    <option value="live">Suara langsung</option>
+    <option value="records">Rekaman</option>
+    <option value="models">Model</option>
+  </sakuga-tabs>
+  <div class="engine" id="engine" role="status" aria-live="polite"><span class="dot"></span><span id="engineText">Menyiapkan mesin…</span></div>
+</header>
+
+<main>
+  <!-- Text -->
+  <section class="page" id="page-text" role="tabpanel" aria-label="Teks">
+    <div class="pair">
+      <div class="side">
+        <div class="langbar" id="textSrcBar"></div>
+      </div>
+      <sakuga-button variant="secondary" id="swap" aria-label="Tukar bahasa" title="Tukar bahasa">⇄</sakuga-button>
+      <div class="side">
+        <div class="langbar" id="textTgtBar"></div>
+      </div>
+    </div>
+    <div class="sheets">
+      <div class="cel">
+        <textarea id="srcText" placeholder="Ketik atau tempel teks di sini" spellcheck="false" maxlength="20000"></textarea>
+        <div class="cel-foot">
+          <span class="hint" id="detected"></span>
+          <span class="count" id="count">0</span>
+          <button class="plain" id="clearSrc" type="button">Hapus teks</button>
+        </div>
+      </div>
+      <div class="cel out" aria-live="polite">
+        <div id="dstText" class="dst" data-empty="Terjemahan muncul di sini"></div>
+        <div class="cel-foot">
+          <span class="hint" id="timing"></span>
+          <button class="plain" id="copyDst" type="button">Salin</button>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <sakuga-button id="go">Terjemahkan</sakuga-button>
+      <label class="inline"><sakuga-toggle id="asType" label="Terjemahkan sambil mengetik"></sakuga-toggle><span>Terjemahkan sambil mengetik</span></label>
+      <span class="keys">Ctrl + Enter</span>
+    </div>
+    <div class="history">
+      <div class="history-head">
+        <h2>Baru saja</h2>
+        <button class="plain" id="clearHistory" type="button">Kosongkan riwayat</button>
+      </div>
+      <ol id="historyList"></ol>
+    </div>
+  </section>
+
+  <!-- Live -->
+  <section class="page" id="page-live" role="tabpanel" aria-label="Suara langsung" hidden>
+    <div class="live-grid">
+      <div class="cel controls">
+        <h2>Dengarkan</h2>
+        <sakuga-radio id="liveSource" label="Sumber suara">
+          <option value="system">Suara komputer (rapat, video, siaran)</option>
+          <option value="mic">Mikrofon (orang di ruangan)</option>
+        </sakuga-radio>
+        <div class="row">
+          <label class="field"><span>Bahasa yang diucapkan</span><select id="liveSrc"></select></label>
+        </div>
+        <div class="row">
+          <span class="field-label">Terjemahkan ke</span>
+          <div class="langbar" id="liveTgtBar"></div>
+        </div>
+        <div class="start">
+          <sakuga-button id="liveGo">Mulai mendengarkan</sakuga-button>
+          <div class="meter" aria-hidden="true"><i id="meter"></i></div>
+        </div>
+        <p class="hint" id="liveState">Pilih sumber suara, lalu tekan Mulai.</p>
+        <hr>
+        <label class="inline"><sakuga-toggle id="overlayToggle" label="Subtitle melayang"></sakuga-toggle><span>Subtitle melayang di atas jendela lain</span></label>
+        <div class="row slider-row">
+          <span class="field-label">Ukuran subtitle</span>
+          <sakuga-slider id="overlaySize" min="18" max="48" step="2" value="28" unit=" px" label="Ukuran subtitle"></sakuga-slider>
+        </div>
+        <hr>
+        <div class="file-row">
+          <sakuga-button variant="secondary" id="fileGo">Terjemahkan berkas rekaman</sakuga-button>
+          <sakuga-tooltip text="Audio atau video: mp3, m4a, wav, mp4, mkv. Hasilnya tersimpan di Rekaman." label="Berkas apa saja">?</sakuga-tooltip>
+        </div>
+        <div id="fileBox" hidden>
+          <p class="hint" id="fileName"></p>
+          <sakuga-progress id="fileProgress" label="Menerjemahkan berkas" done-label="Selesai ✓"></sakuga-progress>
+        </div>
+      </div>
+      <div class="cel transcript">
+        <div class="transcript-head">
+          <h2>Transkrip</h2>
+          <span class="live-badge" id="liveBadge" hidden>Mendengarkan</span>
+        </div>
+        <ol id="liveLines" class="lines" data-empty="Kalimat yang terdengar dan terjemahannya akan muncul di sini, satu per satu."></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- Records -->
+  <section class="page" id="page-records" role="tabpanel" aria-label="Rekaman" hidden>
+    <div class="records-grid">
+      <div class="cel list">
+        <sakuga-input id="recordSearch" type="search" label="Cari rekaman" placeholder="Cari kata di rekaman"></sakuga-input>
+        <ol id="recordList" data-empty="Belum ada rekaman. Dengarkan sesuatu di Suara langsung."></ol>
+      </div>
+      <div class="cel detail" id="recordDetail">
+        <p class="empty-note">Pilih rekaman di kiri untuk membaca transkripnya.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Models -->
+  <section class="page" id="page-models" role="tabpanel" aria-label="Model" hidden>
+    <p class="lede">Model diunduh sekali dari Hugging Face, lalu semua berjalan tanpa internet. Semuanya tersimpan di folder aplikasi.</p>
+    <div class="model-grid">
+      <div class="cel">
+        <h2>Penerjemah</h2>
+        <p class="hint">Mengubah teks dari satu bahasa ke bahasa lain. 200 bahasa.</p>
+        <div id="mtModels" class="models"></div>
+      </div>
+      <div class="cel">
+        <h2>Pendengar</h2>
+        <p class="hint">Mengubah suara menjadi teks. 99 bahasa.</p>
+        <div id="asrModels" class="models"></div>
+      </div>
+      <div class="cel">
+        <h2>Kecepatan</h2>
+        <div id="gpuBox"></div>
+        <hr>
+        <sakuga-checkbox id="keepHistory">Simpan riwayat terjemahan teks</sakuga-checkbox>
+        <p class="hint folder">Folder data: <button class="plain" id="openData" type="button"></button></p>
+      </div>
+    </div>
+    <p class="credits">Dibangun di atas <b>Cicada</b> oleh wquguru (Apache-2.0) dan tombol <b>Sakuga VFX</b> oleh Justin Finkelman (MIT). Model terjemahan NLLB-200 dari Meta berlisensi CC-BY-NC 4.0, hanya untuk pemakaian non-komersial. Whisper dari OpenAI berlisensi MIT.</p>
+  </section>
+</main>
+
+<sakuga-toast id="toast" duration="2.2"></sakuga-toast>
+<script src="app.js"></script>
+</body>
+</html>

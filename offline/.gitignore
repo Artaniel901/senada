@@ -1,0 +1,6 @@
+.venv/
+.pip-cache/
+models/
+data/
+__pycache__/
+*.pyc
