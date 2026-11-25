@@ -2,7 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- The app's privacy manifest (App Store Connect refuses builds without one that use these APIs).
      UserDefaults: the app's own settings (CA92.1). File timestamps: of files in the app's container,
-     an imported copy's date and the voice clip's age (C617.1). No tracking. -->
+     an imported copy's date and the voice clip's age (C617.1). Disk space: a speech model that
+     couldn't download is put down to a full phone, and the user is told so (85F4.1). No tracking. -->
 <plist version="1.0">
 <dict>
 	<key>NSPrivacyTracking</key>
@@ -27,6 +28,14 @@
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
 				<string>C617.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>85F4.1</string>
 			</array>
 		</dict>
 	</array>
