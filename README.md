@@ -1,3 +1,12 @@
+> [!NOTE]
+> **This fork adds [Cicada Offline](offline/README.md):** a Windows translator for text and live speech
+> that runs entirely on the PC, with no AI key and no cloud service. Whisper hears system audio or the
+> microphone, NLLB-200 translates between 73 languages (Indonesian, Korean and English up front), and the
+> controls are [Sakuga VFX](https://github.com/finktheartist/sakuga-vfx) components. It reuses Cicada's
+> Linux core unchanged. Setup, models and licences: [offline/README.md](offline/README.md) (Indonesian).
+>
+> Everything below is the upstream [wquguru/cicada](https://github.com/wquguru/cicada) README.
+
 <p align="center">
   <img src="docs/icon.png" width="128" height="128" alt="Cicada icon">
 </p>
