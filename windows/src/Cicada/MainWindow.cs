@@ -190,6 +190,7 @@ sealed class MainWindow : Window
         var n = Found(Shown).Count;
         if (n == 0) return;
         matchIndex = (Math.Min(matchIndex, n - 1) + d + n) % n;
+        centredFound = null;   // Enter goes to the line even when it is the only one
         tab = "transcript";
         UpdateMatchBar();
         ShowDetail();
@@ -480,6 +481,9 @@ sealed class MainWindow : Window
         shownKey = PageKey();
         if (selected is null || app.Store.Get(selected) is not { } s) { detail.Content = Empty(L("还没有会议记录"), ""); return; }
         var live = app.Listen.Listening && app.Listen.SessionId == s.Id;
+        var thisPage = $"{s.Id}|{tab}";
+        double? keep = pageScroll is { } shownScroll && pageScrollKey == thisPage ? shownScroll.VerticalOffset : null;
+        redrawing = keep is not null;
         var top = new StackPanel();
 
         // When, how long, and from what into what, above the title.
@@ -529,7 +533,7 @@ sealed class MainWindow : Window
         body.Margin = new Thickness(0, 28, 0, 0);
         page.Children.Add(body);
         var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = page };
-        pageScroll = scroll;
+        pageScroll = scroll; pageScrollKey = thisPage;
 
         // Once the title block scrolls away, a slim bar on top keeps the title (a click goes back
         // up), the tabs and the tools in view: the Mac's pinned bar.
@@ -561,6 +565,12 @@ sealed class MainWindow : Window
             pinned.Visibility = below < 0 ? Visibility.Visible : Visibility.Collapsed;
         };
         if (pendingJump is { } jump) { pendingJump = null; jump(scroll); }
+        else if (keep is { } y)
+        {
+            // The new page has no extent until laid out, so the offset goes back on once it is.
+            void Keep(object? _, RoutedEventArgs __) { scroll.Loaded -= Keep; scroll.ScrollToVerticalOffset(y); }
+            scroll.Loaded += Keep;
+        }
         // Scrolling by hand while it plays stops the transcript following the recording. Only input
         // counts (wheel and touchpad, the scroll bar, keys, touch): the page's own scrolling doesn't.
         scroll.PreviewMouseWheel += (_, _) => UserScrolled();
@@ -789,7 +799,12 @@ sealed class MainWindow : Window
             if (l.Id == found) foundRow = r;
             body.Children.Add(r.Card);
         }
-        if (target is null && foundRow is { Card: var foundCard })
+        // Centred when the search moves to it or the page opens, not on every redraw: a live
+        // meeting's next line mustn't pull the reader back from wherever they scrolled.
+        var foundKey = found is null ? null : $"{s.Id}|{search.Text.Trim()}|{found}";
+        var centre = foundKey != centredFound || !redrawing;
+        centredFound = foundKey;
+        if (target is null && centre && foundRow is { Card: var foundCard })
         {
             // Measured once laid out, as below.
             pendingJump = scroll =>
@@ -926,6 +941,13 @@ sealed class MainWindow : Window
     double? pendingSeek;
     readonly DispatcherTimer playTick = new() { Interval = TimeSpan.FromMilliseconds(200) };
     ScrollViewer? pageScroll;
+    /// Which meeting and tab `pageScroll` shows: the same page drawn again (a live meeting's new
+    /// line, the notes updating) stays where the reader had it instead of going back to the top.
+    string? pageScrollKey;
+    /// This draw is the same page again (set by ShowDetail for Transcript).
+    bool redrawing;
+    /// The search's line the page last centred: a redraw that leaves it the same doesn't pull back to it.
+    string? centredFound;
     // The transcript's lines with their times, in time order, the one at the playhead and the one
     // under the pointer.
     readonly List<PlayRow> rows = [];
