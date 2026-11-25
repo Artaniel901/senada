@@ -443,6 +443,13 @@ final class RoomListen: ObservableObject {
 
     private func handle(_ piece: Recognition.Piece, _ gen: Int) {
         guard gen == generation else { return }
+        // Words heard are a voice too: across a room the level stays under the voice mark (a laptop
+        // a metre away peaked at 0.26), and without this 自动识别 never checked and held every line 90 s.
+        if !piece.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            heardVoice = true
+            lastVoiceAt = Date()
+            if !settled, status.isEmpty { status = L("正在识别语言…") }
+        }
         // 自动识别 not settled: a line in what may be the wrong language waits, and no draft shows.
         guard settled else {
             if piece.isFinal { held.append(piece) }
