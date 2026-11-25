@@ -19,6 +19,17 @@ from .core import Paths, SessionStore  # noqa: E402
 LOG = os.path.join(paths.data(), "senada.log")
 
 
+def record_title(local, lang: str) -> str:
+    """A record's name from when it started: "Rekaman 26 Nov 01.21", "Recording Nov 26, 01:21", "녹음 11월 26일 01:21"."""
+    if lang == "en":  # not %b: that follows the system's locale
+        month = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()[local.month - 1]
+        return f"Recording {month} {local.day}, {local:%H:%M}"
+    if lang == "ko":
+        return f"녹음 {local.month}월 {local.day}일 {local:%H:%M}"
+    months = "Jan Feb Mar Apr Mei Jun Jul Agu Sep Okt Nov Des".split()
+    return f"Rekaman {local.day} {months[local.month - 1]} {local:%H.%M}"
+
+
 def log(message: str) -> None:
     try:
         os.makedirs(paths.data(), exist_ok=True)
@@ -371,14 +382,12 @@ class Api:
 
     # Records -------------------------------------------------------------------------------
 
-    @staticmethod
-    def _title(s) -> str:
-        """Cicada names a record in Chinese (会议 11月25日 18:06); here it is Indonesian unless renamed."""
+    def _title(self, s) -> str:
+        """Cicada names a record in Chinese (会议 11月25日 18:06); here it is in the app's language
+        (Bahasa aplikasi) unless renamed, so an export reads the same as the window."""
         if s.renamed:
             return s.title
-        local = s.startedAt.astimezone()
-        months = "Jan Feb Mar Apr Mei Jun Jul Agu Sep Okt Nov Des".split()
-        return f"Rekaman {local.day} {months[local.month - 1]} {local:%H.%M}"
+        return record_title(s.startedAt.astimezone(), self._settings.get("uiLang"))
 
     def sessions(self) -> list:
         out = []

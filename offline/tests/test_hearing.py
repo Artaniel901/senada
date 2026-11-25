@@ -215,6 +215,15 @@ class Settings(unittest.TestCase):
         self.assertEqual(_hearable(["id", "ko", "id", "min", "klingon", 3, "en"]), ["id", "ko", "en"])
         self.assertEqual(_hearable("id"), [])
 
+    def test_record_names_follow_the_app_language(self):
+        import datetime
+        from senada.app import record_title
+        at = datetime.datetime(2026, 11, 26, 1, 21)
+        self.assertEqual(record_title(at, "id"), "Rekaman 26 Nov 01.21")
+        self.assertEqual(record_title(at, "en"), "Recording Nov 26, 01:21")
+        self.assertEqual(record_title(at, "ko"), "녹음 11월 26일 01:21")
+        self.assertEqual(record_title(at, "xx"), "Rekaman 26 Nov 01.21")
+
 
 if __name__ == "__main__":
     unittest.main()

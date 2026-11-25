@@ -14,6 +14,7 @@ DEFAULTS = {
     "asrModel": catalog.DEFAULT["asr"],
     "llmModel": catalog.DEFAULT["llm"],
     "reasoning": True,  # Penalar translates when its model is downloaded; NLLB when this is off
+    "uiLang": "id",  # the window's own language: id | en | ko (ui/i18n.js)
     "style": "casual",  # casual (Sehari-hari) | formal: how Penalar's translations read (reason.STYLES)
     "thinkDeep": False,  # text tab: let Penalar think before answering (slower, for hard sentences)
     "textContext": "",  # text tab: what the text is about

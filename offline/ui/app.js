@@ -17,9 +17,10 @@ const on = (type, fn) => (handlers[type] ||= []).push(fn);
 window.senadaEvent = (e) => (handlers[e.type] || []).forEach((fn) => fn(e));
 
 const toast = (msg) => $('toast').show(msg);
-// Over 200 languages: the list is alphabetical by Indonesian name, so typing a letter jumps to it.
-const byName = () => [...state.langs].sort((a, b) => a.name.localeCompare(b.name, 'id'));
-const langName = (id) => (id === 'auto' ? 'Deteksi' : state.byId[id]?.name || id);
+// Over 200 languages: the list is alphabetical in the interface language, so typing a letter jumps to it.
+const byName = () => [...state.langs].sort((a, b) => a.name.localeCompare(b.name, LOCALE));
+const langName = (id) => (id === 'auto' ? t('Deteksi') : state.byId[id]?.name || id);
+const num = (n, opts) => n.toLocaleString(LOCALE, opts);
 const clock = (t) => {
   const s = Math.max(0, Math.round(t));
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
@@ -42,12 +43,12 @@ class LangBar {
   }
   render() {
     const ids = this.options();
-    const tabs = el('sakuga-tabs', { label: 'Bahasa' });
+    const tabs = el('sakuga-tabs', { label: t('Bahasa') });
     for (const id of ids) tabs.append(el('option', { value: id, textContent: langName(id) }));
     tabs.setAttribute('selected', String(Math.max(0, ids.indexOf(this.value))));
     tabs.addEventListener('change', (e) => this.set(e.detail.value, false));
-    const more = el('select', { title: 'Bahasa lain' });
-    more.append(el('option', { value: '', textContent: 'Lainnya' }));
+    const more = el('select', { title: t('Bahasa lain') });
+    more.append(el('option', { value: '', textContent: t('Lainnya') }));
     for (const l of byName()) {
       if (this.speechOnly && !l.speech) continue;
       if (l.favorite) continue;
@@ -74,7 +75,7 @@ function setupText() {
   tgtBar = new LangBar($('textTgtBar'), { value: state.settings.textTgt, onChange: (v) => { save({ textTgt: v }); translateNow(); } });
   const src = $('srcText');
   src.addEventListener('input', () => {
-    $('count').textContent = src.value.length.toLocaleString('id-ID');
+    $('count').textContent = num(src.value.length);
     if (!$('asType').checked) return;
     clearTimeout(typingTimer);
     typingTimer = setTimeout(() => translateNow(), 550);
@@ -95,13 +96,13 @@ function setupText() {
     const text = $('dstText').textContent;
     if (!text) return;
     await navigator.clipboard.writeText(text);
-    toast('Terjemahan disalin');
+    toast(t('Terjemahan disalin'));
   });
   $('clearHistory').addEventListener('click', async () => {
-    if (!confirm('Hapus semua riwayat terjemahan teks?')) return;
+    if (!confirm(t('Hapus semua riwayat terjemahan teks?'))) return;
     await api.clear_history();
     renderHistory([]);
-    toast('Riwayat dikosongkan');
+    toast(t('Riwayat dikosongkan'));
   });
 }
 
@@ -116,7 +117,7 @@ function keepTyped(field, key, after) {
 
 function showNote(text) {
   $('dstNote').hidden = !text;
-  $('dstNote').textContent = text ? `Catatan: ${text}` : '';
+  $('dstNote').textContent = text ? t('Catatan: {text}', { text }) : '';
 }
 
 const penalarOn = () => !!state.engines.llm;
@@ -152,12 +153,12 @@ async function translateNow(pressed = false) {
   const r = await api.translate(text, srcBar.value, tgtBar.value, true, deep);
   if (key !== lastAsked) return; // a newer request is on its way
   $('dstText').classList.remove('busy');
-  if (r.error) { $('dstText').textContent = ''; showNote(''); $('timing').textContent = r.error; return; }
+  if (r.error) { $('dstText').textContent = ''; showNote(''); $('timing').textContent = tMsg(r.error); return; }
   $('dstText').textContent = r.text;
   showNote(r.note);
   state.detected = r.src;
-  $('detected').textContent = srcBar.value === 'auto' ? (r.guessed ? `Terdeteksi: ${langName(r.guessed)}` : `Bahasa tidak dikenali, dianggap ${langName(r.src)}`) : '';
-  $('timing').textContent = r.src === tgtBar.value ? 'Bahasa asal dan tujuan sama' : '';
+  $('detected').textContent = srcBar.value === 'auto' ? (r.guessed ? t('Terdeteksi: {lang}', { lang: langName(r.guessed) }) : t('Bahasa tidak dikenali, dianggap {lang}', { lang: langName(r.src) })) : '';
+  $('timing').textContent = r.src === tgtBar.value ? t('Bahasa asal dan tujuan sama') : '';
   if (pressed) $('go').done();
   refreshHistory();
 }
@@ -168,7 +169,7 @@ function swap() {
   const out = $('dstText').textContent;
   srcBar.set(to);
   tgtBar.set(from);
-  if (out) { $('srcText').value = out; $('dstText').textContent = ''; $('count').textContent = out.length.toLocaleString('id-ID'); }
+  if (out) { $('srcText').value = out; $('dstText').textContent = ''; $('count').textContent = num(out.length); }
   save({ textSrc: to, textTgt: from });
   translateNow(true);
 }
@@ -184,7 +185,7 @@ function renderHistory(items) {
     const load = () => {
       $('srcText').value = h.text; $('dstText').textContent = h.out;
       srcBar.set(h.src); tgtBar.set(h.tgt);
-      $('count').textContent = h.text.length.toLocaleString('id-ID');
+      $('count').textContent = num(h.text.length);
       lastAsked = `${h.src}|${h.tgt}|${h.text}`;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -213,13 +214,13 @@ function renderHear() {
     if (chosen.includes(id)) c.setAttribute('checked', '');
     c.addEventListener('change', () => {
       const now = c.checked ? [...chosen, id] : chosen.filter((x) => x !== id);
-      if (!now.length) { c.checked = true; toast('Pilih paling sedikit satu bahasa.'); return; }
+      if (!now.length) { c.checked = true; toast(t('Pilih paling sedikit satu bahasa.')); return; }
       save({ liveLangs: now }).then(renderHear);
     });
     box.append(c);
   }
   const more = $('hearMore');
-  more.replaceChildren(el('option', { value: '', textContent: 'Tambah bahasa…' }));
+  more.replaceChildren(el('option', { value: '', textContent: t('Tambah bahasa…') }));
   for (const l of byName().filter((l) => l.speech && !shown.includes(l.id))) {
     more.append(el('option', { value: l.id, textContent: `${l.name} · ${l.native}` }));
   }
@@ -231,7 +232,7 @@ function setupLive() {
   radio.value = state.settings.liveSource;
   radio.addEventListener('change', () => save({ liveSource: radio.value }));
   const src = $('liveSrc');
-  src.append(el('option', { value: 'auto', textContent: 'Deteksi otomatis' }));
+  src.append(el('option', { value: 'auto', textContent: t('Deteksi otomatis') }));
   for (const l of byName().filter((l) => l.speech)) src.append(el('option', { value: l.id, textContent: `${l.name} · ${l.native}` }));
   src.value = state.settings.liveSrc;
   src.addEventListener('change', () => { save({ liveSrc: src.value }); renderHear(); });
@@ -242,7 +243,7 @@ function setupLive() {
   $('liveGo').addEventListener('click', async () => {
     if (state.live) { await api.stop_live(); return; }
     const r = await api.start_live(radio.value, src.value, liveTgtBar.value, null);
-    if (r.error) { $('liveState').textContent = r.error; }
+    if (r.error) { $('liveState').textContent = tMsg(r.error); }
   });
   // The size only matters while the subtitle is up, so it is shown only then.
   const sizeRow = () => { $('sizeRow').hidden = !$('overlayToggle').checked; };
@@ -253,16 +254,16 @@ function setupLive() {
   $('overlaySize').value = state.settings.overlaySize;
   $('overlaySize').addEventListener('change', () => save({ overlaySize: Number($('overlaySize').value) }));
   $('fileGo').addEventListener('click', async () => {
-    if (state.live) { $('liveState').textContent = 'Hentikan dulu yang sedang berjalan.'; return; }
+    if (state.live) { $('liveState').textContent = t('Hentikan dulu yang sedang berjalan.'); return; }
     const r = await api.translate_file(src.value, liveTgtBar.value);
-    if (r.error) { $('liveState').textContent = r.error; return; }
+    if (r.error) { $('liveState').textContent = tMsg(r.error); return; }
     if (r.cancelled) return;
     $('fileBox').hidden = false;
     $('fileName').textContent = r.name;
     // Made only now: a progress bar draws on the page-wide effects layer every frame, and a hidden one draws at the top-left corner.
     if (!$('fileProgress')) {
-      const bar = el('sakuga-progress', { id: 'fileProgress', label: 'Menerjemahkan berkas' });
-      bar.setAttribute('done-label', 'Selesai ✓');
+      const bar = el('sakuga-progress', { id: 'fileProgress', label: t('Menerjemahkan berkas') });
+      bar.setAttribute('done-label', t('Selesai ✓'));
       $('fileBox').append(bar);
     }
     $('fileProgress').reset();
@@ -273,8 +274,8 @@ function setupLive() {
     $('liveLines').replaceChildren();
     document.body.classList.add('live-on');
     $('liveBadge').hidden = false;
-    $('liveBadge').textContent = e.source === 'file' ? 'Membaca berkas' : 'Mendengarkan';
-    $('liveGo').textContent = e.source === 'file' ? 'Hentikan' : 'Berhenti';
+    $('liveBadge').textContent = t(e.source === 'file' ? 'Membaca berkas' : 'Mendengarkan');
+    $('liveGo').textContent = t(e.source === 'file' ? 'Hentikan' : 'Berhenti');
     $('liveState').textContent = '';
   });
   on('stopped', (e) => {
@@ -282,20 +283,20 @@ function setupLive() {
     state.live = false;
     document.body.classList.remove('live-on');
     $('liveBadge').hidden = true;
-    $('liveGo').textContent = 'Mulai mendengarkan';
+    $('liveGo').textContent = t('Mulai mendengarkan');
     $('meter').style.width = '0';
-    $('liveState').textContent = e.lines ? `${e.lines} kalimat tersimpan di Rekaman` : 'Tidak ada ucapan yang terdengar';
+    $('liveState').textContent = e.lines ? t('{n} kalimat tersimpan di Rekaman', { n: e.lines }) : t('Tidak ada ucapan yang terdengar');
     if (e.lines) $('liveGo').done();
   });
   on('device', (e) => {
     $('liveState').textContent = e.name;
-    if (e.switched) toast(`Pindah ke ${e.name}`);
+    if (e.switched) toast(t('Pindah ke {name}', { name: e.name }));
   });
   on('level', (e) => { $('meter').style.width = `${Math.min(100, Math.sqrt(e.rms) * 260)}%`; });
   on('partial', showPartial);
   on('partial-gone', dropPartial);
   on('line', (e) => { dropPartial(); addLine($('liveLines'), e, true); });
-  on('error', (e) => { $('liveState').textContent = `Berhenti: ${e.message}`; });
+  on('error', (e) => { $('liveState').textContent = t('Berhenti: {message}', { message: tMsg(e.message) }); });
   on('file-progress', (e) => $('fileProgress')?.set(e.value));
 }
 
@@ -315,10 +316,10 @@ function addLine(list, line, fresh) {
   const kids = [
     el('span', { className: 't', textContent: clock(line.t) }),
     el('div', { className: 'src' }, el('span', { className: 'lang', textContent: langName(line.srcLang) }), line.src),
-    el('div', { className: pending ? 'dst pending' : 'dst', textContent: pending ? 'Menerjemahkan…' : line.dst || line.src }),
+    el('div', { className: pending ? 'dst pending' : 'dst', textContent: pending ? t('Menerjemahkan…') : line.dst || line.src }),
   ];
-  if (line.fixes?.length) kids.push(el('p', { className: 'fixed', textContent: `Dibetulkan dari yang terdengar: ${line.fixes.map(([a, b]) => `${a} → ${b}`).join(', ')}` }));
-  if (line.note) kids.push(el('p', { className: 'note', textContent: `Catatan: ${line.note}` }));
+  if (line.fixes?.length) kids.push(el('p', { className: 'fixed', textContent: t('Dibetulkan dari yang terdengar: {fixes}', { fixes: line.fixes.map(([a, b]) => `${a} → ${b}`).join(', ') }) }));
+  if (line.note) kids.push(el('p', { className: 'note', textContent: t('Catatan: {text}', { text: line.note }) }));
   const old = line.id && list.querySelector(`li[data-id="${CSS.escape(line.id)}"]`);
   if (old) { old.replaceChildren(...kids); return; }
   list.querySelector('.fresh')?.classList.remove('fresh');
@@ -343,7 +344,7 @@ function renderRecords() {
     const when = new Date(r.startedAt);
     const b = el('button', { className: 'record', type: 'button' },
       el('b', { textContent: r.title }),
-      el('span', { textContent: `${when.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} ${when.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} · ${r.lines} kalimat · ${clock(r.seconds)}` }),
+      el('span', { textContent: `${when.toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })} ${when.toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' })} · ${t('{n} kalimat', { n: r.lines })} · ${clock(r.seconds)}` }),
       el('p', { textContent: r.preview }));
     b.setAttribute('aria-current', String(state.record === r.id));
     b.addEventListener('click', () => openRecord(r.id));
@@ -355,26 +356,26 @@ async function openRecord(id) {
   renderRecords();
   const s = await api.session(id);
   const box = $('recordDetail');
-  if (s.error) { box.replaceChildren(el('p', { className: 'error', textContent: s.error })); return; }
+  if (s.error) { box.replaceChildren(el('p', { className: 'error', textContent: tMsg(s.error) })); return; }
   const list = el('ol', { className: 'lines' });
   for (const l of s.lines) addLine(list, l, false);
-  const fmt = el('select', { title: 'Format berkas' });
-  for (const [v, label] of [['txt', 'Teks dua bahasa (.txt)'], ['srt', 'Subtitle terjemahan (.srt)'], ['md', 'Tabel Markdown (.md)']]) fmt.append(el('option', { value: v, textContent: label }));
-  const saveBtn = el('sakuga-button', { textContent: 'Simpan' });
+  const fmt = el('select', { title: t('Format berkas') });
+  for (const [v, label] of [['txt', 'Teks dua bahasa (.txt)'], ['srt', 'Subtitle terjemahan (.srt)'], ['md', 'Tabel Markdown (.md)']]) fmt.append(el('option', { value: v, textContent: t(label) }));
+  const saveBtn = el('sakuga-button', { textContent: t('Simpan') });
   saveBtn.setAttribute('variant', 'secondary');
   saveBtn.addEventListener('click', async () => {
     const r = await api.export_session(id, fmt.value);
-    if (r.path) { saveBtn.done(); toast('Berkas disimpan'); }
-    else if (r.error) toast(r.error);
+    if (r.path) { saveBtn.done(); toast(t('Berkas disimpan')); }
+    else if (r.error) toast(tMsg(r.error));
   });
   const exp = el('div', { className: 'export langbar-like' }, fmt, saveBtn);
-  const del = el('button', { className: 'plain danger', type: 'button', textContent: 'Hapus rekaman' });
+  const del = el('button', { className: 'plain danger', type: 'button', textContent: t('Hapus rekaman') });
   del.addEventListener('click', async () => {
-    if (!confirm(`Hapus rekaman "${s.title}"? Transkripnya tidak bisa dikembalikan.`)) return;
+    if (!confirm(t('Hapus rekaman "{title}"? Transkripnya tidak bisa dikembalikan.', { title: s.title }))) return;
     await api.delete_session(id);
     state.record = null;
     box.replaceChildren();
-    toast('Rekaman dihapus');
+    toast(t('Rekaman dihapus'));
     loadRecords();
   });
   box.replaceChildren(el('div', { className: 'detail-head' }, el('h2', { textContent: s.title }), del), exp, list);
@@ -399,34 +400,35 @@ function renderPenalar() {
 function modelCard(m, active, kind) {
   const actions = el('div', { className: 'model-actions' });
   if (downloads[m.id]) {
-    actions.append(el('span', { className: 'state', textContent: 'Mengunduh…' }));
-    const cancel = el('button', { className: 'plain', type: 'button', textContent: 'Batalkan' });
+    actions.append(el('span', { className: 'state', textContent: t('Mengunduh…') }));
+    const cancel = el('button', { className: 'plain', type: 'button', textContent: t('Batalkan') });
     cancel.addEventListener('click', () => api.cancel_download());
     actions.append(cancel);
   } else if (!m.installed) {
-    const b = el('sakuga-button', { textContent: `Unduh ${m.sizeMb >= 1000 ? (m.sizeMb / 1000).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' GB' : m.sizeMb + ' MB'}` });
+    const size = m.sizeMb >= 1000 ? num(m.sizeMb / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' GB' : m.sizeMb + ' MB';
+    const b = el('sakuga-button', { textContent: t('Unduh {size}', { size }) });
     b.addEventListener('click', () => startDownload(m.id));
     actions.append(b);
   } else if (active) {
-    actions.append(el('span', { className: 'state', textContent: 'Sedang dipakai' }));
+    actions.append(el('span', { className: 'state', textContent: t('Sedang dipakai') }));
   } else {
-    const use = el('sakuga-button', { textContent: 'Pakai ini' });
+    const use = el('sakuga-button', { textContent: t('Pakai ini') });
     use.setAttribute('variant', 'secondary');
     use.addEventListener('click', async () => {
       await save({ [MODEL_KEY[kind]]: m.id });
       use.done(); renderModels();
     });
-    const rm = el('button', { className: 'plain danger', type: 'button', textContent: 'Hapus dari komputer' });
+    const rm = el('button', { className: 'plain danger', type: 'button', textContent: t('Hapus dari komputer') });
     rm.addEventListener('click', async () => {
-      if (!confirm(`Hapus ${m.title} (${m.sizeMb} MB) dari komputer ini? Bisa diunduh lagi nanti.`)) return;
+      if (!confirm(t('Hapus {title} ({size} MB) dari komputer ini? Bisa diunduh lagi nanti.', { title: t(m.title), size: m.sizeMb }))) return;
       const r = await api.remove_model(m.id);
-      if (r.error) return toast(r.error);
+      if (r.error) return toast(tMsg(r.error));
       state.models = r.models; renderModels();
     });
     actions.append(use, rm);
   }
   const card = el('div', { className: `model${active && m.installed ? ' active' : ''}` },
-    el('div', { className: 'model-head' }, el('b', { textContent: m.title }), el('span', { className: 'size', textContent: `${m.sizeMb} MB` })),
+    el('div', { className: 'model-head' }, el('b', { textContent: t(m.title) }), el('span', { className: 'size', textContent: `${m.sizeMb} MB` })),
     actions);
   if (downloads[m.id]) card.append(downloads[m.id].room);
   return card;
@@ -436,28 +438,28 @@ function renderGpu() {
   const box = $('gpuBox');
   const parts = [];
   if (!g.nvidia) {
-    parts.push(el('span', { className: 'state', textContent: 'Berjalan di CPU' }));
+    parts.push(el('span', { className: 'state', textContent: t('Berjalan di CPU') }));
   } else if (!g.installed) {
     if (downloads['gpu-cuda']) {
-      parts.push(el('span', { className: 'state', textContent: 'Mengunduh…' }), downloads['gpu-cuda'].room);
+      parts.push(el('span', { className: 'state', textContent: t('Mengunduh…') }), downloads['gpu-cuda'].room);
     } else {
-      const b = el('sakuga-button', { textContent: `Aktifkan GPU (${g.sizeMb} MB)` });
+      const b = el('sakuga-button', { textContent: t('Aktifkan GPU ({size} MB)', { size: g.sizeMb }) });
       b.addEventListener('click', () => startDownload('gpu-cuda'));
       parts.push(b);
     }
   } else {
-    const t = el('sakuga-toggle', { label: 'Pakai GPU' });
-    t.checked = state.settings.device !== 'cpu';
-    t.addEventListener('change', async () => { await save({ device: t.checked ? 'auto' : 'cpu' }); });
-    parts.push(el('label', { className: 'inline gpu-toggle' }, t, el('span', { textContent: 'Pakai GPU NVIDIA' })));
+    const gpu = el('sakuga-toggle', { label: t('Pakai GPU') });
+    gpu.checked = state.settings.device !== 'cpu';
+    gpu.addEventListener('change', async () => { await save({ device: gpu.checked ? 'auto' : 'cpu' }); });
+    parts.push(el('label', { className: 'inline gpu-toggle' }, gpu, el('span', { textContent: t('Pakai GPU NVIDIA') })));
   }
   box.replaceChildren(...parts);
 }
 async function startDownload(id) {
   const r = await api.download(id);
-  if (r.error) return toast(r.error);
-  const bar = el('sakuga-progress', { label: 'Mengunduh model' });
-  bar.setAttribute('done-label', 'Terunduh ✓');
+  if (r.error) return toast(tMsg(r.error));
+  const bar = el('sakuga-progress', { label: t('Mengunduh model') });
+  bar.setAttribute('done-label', t('Terunduh ✓'));
   const room = el('div', { className: 'progress-room' }, bar);
   downloads[id] = { bar, room };
   renderModels();
@@ -471,10 +473,10 @@ function setupModels() {
       delete downloads[e.id];
       const r = await api.models();
       state.models = r.models; state.gpu.installed = r.gpuInstalled; renderModels();
-      toast('Model siap dipakai');
+      toast(t('Model siap dipakai'));
     }, 1600);
   });
-  on('download-failed', (e) => { delete downloads[e.id]; renderModels(); toast(e.message.slice(0, 40)); });
+  on('download-failed', (e) => { delete downloads[e.id]; renderModels(); toast(tMsg(e.message).slice(0, 40)); });
   $('reasoning').checked = !!state.settings.reasoning;
   $('reasoning').addEventListener('change', () => save({ reasoning: $('reasoning').checked }));
   keepTyped($('words'), 'words');
@@ -491,12 +493,12 @@ function setupEngines() {
     const box = $('engine');
     // Only something the user must act on is shown here: a failed engine or a missing model.
     box.className = 'engine error';
-    const problem = state.engineError || (state.missing ? 'Unduh model di tab Model untuk mulai.' : '');
+    const problem = state.engineError || (state.missing ? t('Unduh model di tab Model untuk mulai.') : '');
     $('engineText').textContent = problem;
     box.hidden = !problem;
   };
   on('engine', (e) => {
-    state.engineError = e.state === 'error' ? `${e.kind === 'llm' ? 'Penalar' : 'Mesin'} gagal dimuat: ${e.message}` : null;
+    state.engineError = e.state === 'error' ? t(e.kind === 'llm' ? 'Penalar gagal dimuat: {message}' : 'Mesin gagal dimuat: {message}', { message: e.message }) : null;
     if (e.state === 'missing' && e.kind !== 'llm') state.missing = true;  // no Penalar model is fine: NLLB translates
     if (e.state === 'ready') { state.engines[e.kind] = { model: e.model, device: e.device }; state.missing = false; }
     if (['loading', 'off', 'missing', 'error'].includes(e.state)) state.engines[e.kind] = null;
@@ -514,6 +516,17 @@ async function start() {
   state.langs = init.languages;
   state.byId = Object.fromEntries(init.languages.map((l) => [l.id, l]));
   state.settings = init.settings;
+  // The interface language is read from storage before Python answers (i18n.js); the setting wins. One
+  // reload at most (#lang), in case the storage can't keep it.
+  const wanted = init.settings.uiLang || 'id';
+  if (wanted !== UI_LANG && location.hash !== '#lang') {
+    localStorage.setItem('senadaUiLang', wanted);
+    location.hash = 'lang';
+    location.reload();
+    return;
+  }
+  if (LANG_NAMES) for (const l of state.langs) l.name = uiLangName(l.id, l.name);
+  setupUiLang();
   state.models = init.models;
   state.gpu = init.gpu;
   state.engines = init.engines;
@@ -530,6 +543,19 @@ async function start() {
   $('srcText').focus();
   if (init.drive) new Function('api', '$', 'on', 'showPage', init.drive)(api, $, on, showPage);
 }
+// The header's language menu: each language named in itself; the page reloads in the one picked.
+function setupUiLang() {
+  const pick = $('uiLang');
+  for (const [id, name] of UI_LANGS) pick.append(el('option', { value: id, textContent: name }));
+  pick.value = UI_LANG;
+  pick.addEventListener('change', async () => {
+    if (state.live) { pick.value = UI_LANG; toast(t('Hentikan dulu yang sedang berjalan.')); return; }
+    await save({ uiLang: pick.value });
+    localStorage.setItem('senadaUiLang', pick.value);
+    location.reload();
+  });
+}
+
 // One way to change page, for the tabs and for code: the tabs follow, and the page's data is fetched fresh.
 const PAGES = ['text', 'live', 'records', 'models'];
 function showPage(name) {

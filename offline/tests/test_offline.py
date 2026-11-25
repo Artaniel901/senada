@@ -184,9 +184,13 @@ class Titles(unittest.TestCase):
         from senada.app import Api
         from senada.core import Session
         s = Session(id="x", title="会议 11月25日 18:06", startedAt=datetime(2026, 11, 25, 9, 6, tzinfo=timezone.utc))
-        self.assertTrue(Api._title(s).startswith("Rekaman 25 Nov "))
+        api = Api.__new__(Api)
+        api._settings = {"uiLang": "id"}  # only .get is read
+        self.assertTrue(api._title(s).startswith("Rekaman 25 Nov "))
+        api._settings = {"uiLang": "en"}
+        self.assertTrue(api._title(s).startswith("Recording Nov 25, "))
         s.renamed, s.title = True, "Kuliah termodinamika"
-        self.assertEqual(Api._title(s), "Kuliah termodinamika")
+        self.assertEqual(api._title(s), "Kuliah termodinamika")
 
 
 class Catalog(unittest.TestCase):
