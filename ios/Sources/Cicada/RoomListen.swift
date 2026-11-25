@@ -97,6 +97,18 @@ final class RoomListen: ObservableObject {
     private var lastVoiceAt = Date.distantPast
     /// The recognizer in use: pieces from one replaced (another language) are dropped.
     private var generation = 0
+
+    /// 会后重听, as on the Mac: a second recognizer, never hurried for the subtitles, hears the same
+    /// audio and its words replace the live ones in the record (`RecordRefiner`). Each finished
+    /// piece is a segment; a line (one or more joined pieces) changes once all its segments settled.
+    private var refiner: RecordRefiner?
+    private var refinerGen = 0
+    private var recordTask: Task<Void, Never>?
+    private var segCounter = 0
+    private var lineOfSegment: [Int: String] = [:]
+    private var refining: [String: [(id: Int, text: String, settled: String?)]] = [:]
+    /// Debug (`recordTrack:off`): the record keeps the live recognizer's words, for comparing.
+    static var recordTrackOff = false
     /// Models compared at once: each check transcribes the clip with every one of them.
     private static let maxCandidates = 4
     /// Kept audio after which the language stays as it is (nobody spoke a clear sentence).
@@ -216,7 +228,9 @@ final class RoomListen: ObservableObject {
             if await Recognition.status(lang.locale) != .installed {
                 try await fetch(lang)
             }
-            let stream = try await Recognition.start(lang.locale, drafts: true, confidence: true)
+            let live = try await Recognition.start(lang.locale, drafts: true, confidence: true)
+            guard isRunning else { await live.cancel(); return }
+            let stream = await withRecord(live)
             guard isRunning else { await stream.cancel(); return }
             self.stream = stream
             let s = store.begin()
@@ -351,11 +365,13 @@ final class RoomListen: ObservableObject {
 
     /// Another language: a recognizer for it hears everything kept so far, then the microphone.
     private func switchTo(_ other: Lang) async {
-        guard let next = try? await Recognition.start(other.locale, drafts: true, confidence: true) else {
+        guard let live = try? await Recognition.start(other.locale, drafts: true, confidence: true) else {
             debugLog("room: auto can't start \(other.locale), staying in \(lang.locale)")
             settle()
             return
         }
+        guard isRunning, !settled else { await live.cancel(); return }
+        let next = await withRecord(live, locale: other.locale)
         guard isRunning, !settled else { await next.cancel(); return }
         let old = stream
         lang = other
@@ -511,12 +527,14 @@ final class RoomListen: ObservableObject {
         userPaused = false
         resumeWhenActive = false
         if !Self.silent { audio.stop() }
-        let stream = self.stream, reader = self.reader
+        let stream = self.stream, reader = self.reader, recordTask = self.recordTask
         self.stream = nil
         self.reader = nil
         stopping = Task {
             await stream?.finish()
             reader?.cancel()
+            // The record's last sentences settle their lines before the notes' final round reads them.
+            await recordTask?.value
             notes.finish()
             // A meeting with no line is kept only when the microphone heard voices (its recording holds them).
             let ended = sessionID
@@ -564,6 +582,7 @@ final class RoomListen: ObservableObject {
            HeardText.continues(prev.src, final, gap: piece.start - prev.end, cut: false) {
             let joined = HeardText.join(prev.src, final)
             last = (prev.id, joined, piece.end)
+            emitted(piece, final, line: prev.id)
             store.setSource(lineID: prev.id, joined)
             if let i = lines.firstIndex(where: { $0.id == prev.id }) { lines[i].src = joined }
             if let sid = sessionID { onHeard?(sid, prev.id) }
@@ -580,10 +599,87 @@ final class RoomListen: ObservableObject {
         if let sid = sessionID { onHeard?(sid, id) }
         if lines.count > 60 { lines.removeFirst(lines.count - 60) }
         last = (id, final, piece.end)
+        emitted(piece, final, line: id)
         if let samples = audio.voiceSamples(from: piece.start, to: piece.end) {
             speakers.tag(lineID: id, samples: samples)
         }
         translate(id, final)
+    }
+
+    // MARK: 会后重听
+
+    /// `live` with the record's own recognizer beside it, fed the same audio (`TeeStream`), or `live`
+    /// alone where there is none (`Recognition.recordTrack`: not the simulator nor the older model).
+    private func withRecord(_ live: RecognitionStream, locale: String? = nil) async -> RecognitionStream {
+        recordTask?.cancel()
+        recordTask = nil
+        refiner = nil
+        lineOfSegment = [:]
+        refining = [:]
+        guard !Self.recordTrackOff,
+              let record = try? await Recognition.startRecord(locale ?? lang.locale, format: live.format) else { return live }
+        refinerGen += 1
+        let gen = refinerGen
+        refiner = RecordRefiner()
+        let session = sessionID
+        recordTask = Task { [weak self] in
+            do {
+                for try await sentence in record.sentences {
+                    guard let self, gen == self.refinerGen, self.refiner != nil else { return }
+                    contentLog("RECORD \(sentence.runs.map(\.text).joined())")
+                    self.settled(self.refiner!.heard(sentence.runs, through: sentence.through), session: session)
+                }
+            } catch {
+                debugLog("room: record track: \(error)")
+            }
+            guard let self, gen == self.refinerGen, self.refiner != nil else { return }
+            self.settled(self.refiner!.finish(), session: session)
+            self.refiner = nil
+        }
+        debugLog("room: record track on \(locale ?? lang.locale)")
+        return TeeStream(live: live, record: record)
+    }
+
+    /// A finished piece, a segment of line `line`, for the record's recognizer to settle.
+    private func emitted(_ piece: Recognition.Piece, _ text: String, line: String) {
+        guard refiner != nil else { return }
+        segCounter += 1
+        let seg = segCounter
+        lineOfSegment[seg] = line
+        refining[line, default: []].append((seg, text, nil))
+        settled(refiner!.emitted(id: seg, start: piece.start, end: piece.end, text: text), session: sessionID)
+    }
+
+    private func settled(_ out: [(id: Int, text: String)], session: String?) {
+        for o in out { refined(o.id, o.text, session: session ?? sessionID) }
+    }
+
+    /// The record's recognizer settled segment `seg`. Once every segment of its line has, the line
+    /// takes the record's words and is translated again; a segment it heard nothing in keeps its own.
+    private func refined(_ seg: Int, _ text: String, session: String?) {
+        guard let session, let line = lineOfSegment.removeValue(forKey: seg), var segs = refining[line],
+              let k = segs.firstIndex(where: { $0.id == seg }) else { return }
+        let heard = HeardText.clean(text)
+        segs[k].settled = heard.contains(where: \.isLetter) ? heard : segs[k].text
+        refining[line] = segs
+        guard segs.allSatisfy({ $0.settled != nil }) else { return }
+        refining[line] = nil
+        let parts = segs.map { $0.settled! }
+        let whole = parts.dropFirst().reduce(parts[0]) { HeardText.join($0, $1) }
+        guard let rec = store.session(session)?.lines.first(where: { $0.id == line }), whole != rec.src else { return }
+        // The line's later pieces may still come (joined): they start a new round for it.
+        store.setSource(in: session, lineID: line, whole)
+        if let i = lines.firstIndex(where: { $0.id == line }) { lines[i].src = whole }
+        if last?.id == line { last?.src = whole }
+        onHeard?(session, line)
+        contentLog("REFINE \(line): \(rec.src) => \(whole)")
+        debugLog("room: refined \(line)")
+        Task { [weak self] in
+            guard let self, let out = await self.translator.translate(whole, source: rec.srcLang, target: rec.dstLang, kind: .sentence) else { return }
+            guard self.store.session(session)?.lines.first(where: { $0.id == line })?.src == whole else { return }
+            self.store.setTranslation(in: session, lineID: line, out)
+            if let i = self.lines.firstIndex(where: { $0.id == line }) { self.lines[i].dst = out }
+        }
     }
 
     /// Debug (`heard:<text>`): a finished sentence as if the recognizer gave it, in a silent meeting.

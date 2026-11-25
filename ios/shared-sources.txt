@@ -34,3 +34,4 @@ Sources/Cicada/SpeakerEnrollment.swift
 Sources/Cicada/HandsFree.swift
 Sources/Cicada/TranscriptSearch.swift
 Sources/Cicada/ModelProblem.swift
+Sources/Cicada/RecordRefiner.swift
