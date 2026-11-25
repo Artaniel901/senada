@@ -1,6 +1,6 @@
 """The window: pywebview (Edge WebView2) showing ui/index.html, with `Api` as window.pywebview.api.
 Engines load in the background after the window opens; everything they report reaches the page as
-window.cicadaEvent({...}). A second, frameless window shows the floating subtitles."""
+window.senadaEvent({...}). A second, frameless window shows the floating subtitles."""
 from __future__ import annotations
 
 import json
@@ -16,7 +16,7 @@ catalog.use_gpu_libraries()
 
 from .core import Paths, SessionStore  # noqa: E402
 
-LOG = os.path.join(paths.data(), "cicada-offline.log")
+LOG = os.path.join(paths.data(), "senada.log")
 
 
 def log(message: str) -> None:
@@ -29,7 +29,7 @@ def log(message: str) -> None:
 
 
 def _drive_script() -> str | None:
-    path = os.environ.get("CICADA_OFFLINE_DRIVE")
+    path = os.environ.get("SENADA_DRIVE")
     if not path:
         return None
     with open(path, encoding="utf-8") as f:
@@ -128,7 +128,7 @@ class Api:
             if name == "overlay" and event.get("type") not in ("line", "overlay-style", "stopped", "started"):
                 continue
             try:
-                w.evaluate_js(f"window.cicadaEvent && window.cicadaEvent({payload})")
+                w.evaluate_js(f"window.senadaEvent && window.senadaEvent({payload})")
             except Exception:
                 pass
 
@@ -442,7 +442,7 @@ class Api:
         if show:
             width, height = self.OVERLAY_SIZE
             bar = webview.create_window(
-                "Subtitle Cicada", url=os.path.join(paths.UI, "overlay.html"), js_api=self, width=width, height=height,
+                "Subtitle Senada", url=os.path.join(paths.UI, "overlay.html"), js_api=self, width=width, height=height,
                 frameless=True, easy_drag=True, on_top=True, focus=False, background_color="#1D1A4A")
             bar.events.shown += lambda: _place_at_bottom(bar)
             self._windows["overlay"] = bar
@@ -474,13 +474,20 @@ def _place_at_bottom(window) -> None:
 
 
 def _first_instance() -> bool:
-    """One Cicada Offline at a time: a second copy loads the models onto the GPU again, and two of them
+    """One Senada at a time: a second copy loads the models onto the GPU again, and two of them
     overflowing 6 GB of video memory made each sentence take 35 s instead of 0.3 s in testing."""
     import ctypes
     kernel32 = ctypes.windll.kernel32
     kernel32.CreateMutexW.restype = ctypes.c_void_p
-    _first_instance.handle = kernel32.CreateMutexW(None, False, "Local\\CicadaOfflineSingleInstance")
+    _first_instance.handle = kernel32.CreateMutexW(None, False, "Local\\SenadaSingleInstance")
     return kernel32.GetLastError() != 183  # ERROR_ALREADY_EXISTS
+
+
+def _own_taskbar_button() -> None:
+    """The app runs inside pythonw.exe, so Windows would group it with every other Python window
+    under Python's icon. Its own id (the one setup's shortcut carries) gives it its own button."""
+    import ctypes
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(paths.APP_ID)
 
 
 def main() -> None:
@@ -488,12 +495,13 @@ def main() -> None:
     import webview
 
     if not _first_instance():
-        ctypes.windll.user32.MessageBoxW(None, "Cicada Offline sudah terbuka. Cari jendelanya di taskbar.", "Cicada Offline", 0x40)
+        ctypes.windll.user32.MessageBoxW(None, "Senada sudah terbuka. Cari jendelanya di taskbar.", "Senada", 0x40)
         return
+    _own_taskbar_button()
     api = Api()
     log(f"start {__version__}")
     main_window = webview.create_window(
-        "Cicada Offline", url=os.path.join(paths.UI, "index.html"), js_api=api,
+        "Senada", url=os.path.join(paths.UI, "index.html"), js_api=api,
         width=1180, height=800, min_size=(820, 620), background_color="#F6F5FB", text_select=True)
     api._windows = {"main": main_window}
 
@@ -510,5 +518,5 @@ def main() -> None:
             bar.destroy()
 
     main_window.events.closing += closing
-    webview.start(started, gui="edgechromium", private_mode=False,
-                  storage_path=os.path.join(paths.data(), "webview"), debug=os.environ.get("CICADA_OFFLINE_DEBUG") == "1")
+    webview.start(started, gui="edgechromium", private_mode=False, icon=paths.ICON,
+                  storage_path=os.path.join(paths.data(), "webview"), debug=os.environ.get("SENADA_DEBUG") == "1")

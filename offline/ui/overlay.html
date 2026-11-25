@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<title>Subtitle Cicada</title>
+<title>Subtitle Senada</title>
 <style>
   /* The floating subtitle bar is the whole window: frameless, always on top, dragged anywhere. It is
      solid rather than see-through because pywebview's transparent windows ignore `hidden` on Windows. */
@@ -27,11 +27,11 @@
 <body class="pywebview-drag-region idle">
   <button id="close" type="button" title="Tutup subtitle melayang" aria-label="Tutup subtitle melayang">×</button>
   <div class="src" id="src"></div>
-  <div class="dst" id="dst">Subtitle muncul di sini saat Cicada mendengarkan. Seret untuk memindahkan.</div>
+  <div class="dst" id="dst">Subtitle muncul di sini saat Senada mendengarkan. Seret untuk memindahkan.</div>
 <script>
   'use strict';
   let clearTimer = null;
-  window.cicadaEvent = (e) => {
+  window.senadaEvent = (e) => {
     if (e.type === 'overlay-style') document.body.style.setProperty('--size', `${e.size}px`);
     if (e.type === 'line') {
       document.body.classList.remove('idle');

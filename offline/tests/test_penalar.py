@@ -8,11 +8,11 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ.setdefault("CICADA_OFFLINE_HOME", tempfile.mkdtemp(prefix="cicada-offline-test-"))
+os.environ.setdefault("SENADA_HOME", tempfile.mkdtemp(prefix="senada-test-"))
 
-from cicada_offline import catalog, export, reason  # noqa: E402
-from cicada_offline.core import TranscriptLine  # noqa: E402
-from cicada_offline.live import interpret  # noqa: E402
+from senada import catalog, export, reason  # noqa: E402
+from senada.core import TranscriptLine  # noqa: E402
+from senada.live import interpret  # noqa: E402
 
 
 class Replies(unittest.TestCase):
@@ -71,11 +71,17 @@ class Pieces(unittest.TestCase):
 class Pairs(unittest.TestCase):
     def test_regional_languages_go_to_nllb(self):
         self.assertTrue(reason.handles("id", "ko"))
+        self.assertTrue(reason.handles("mr", "is"))
         self.assertFalse(reason.handles("min", "id"))
         self.assertFalse(reason.handles("en", "bug"))
+        self.assertFalse(reason.handles("arz", "en"))  # Arabic as spoken: NLLB
+
+    def test_penalar_languages_are_listed_ones(self):
+        from senada import languages
+        self.assertLessEqual(reason.PENALAR, set(languages.BY_ID))
 
     def test_every_language_has_a_name_for_the_prompt(self):
-        from cicada_offline import languages
+        from senada import languages
         for l in languages.LANGUAGES:
             self.assertIn(l.id, reason.ENGLISH, l.id)
 
@@ -181,7 +187,7 @@ class Proposed(unittest.TestCase):
 
 class SameLanguageText(unittest.TestCase):
     def test_comes_back_unchanged_while_no_engine_is_loaded(self):
-        from cicada_offline.app import Api
+        from senada.app import Api
         api = Api()  # engines are not loaded until the window starts
         r = api.translate("밥 먹었어?", "auto", "ko", remember=False)
         self.assertEqual((r.get("text"), r.get("src"), r.get("engine")), ("밥 먹었어?", "ko", "none"))
@@ -197,11 +203,11 @@ class PenalarCatalog(unittest.TestCase):
 
     def test_model_needs_the_runtime_too(self):
         # Under the test home there is no runtime, so no Penalar model counts as installed.
-        os.environ["CICADA_OFFLINE_MODELS"] = tempfile.mkdtemp(prefix="cicada-offline-models-")
+        os.environ["SENADA_MODELS"] = tempfile.mkdtemp(prefix="senada-models-")
         try:
             self.assertFalse(catalog.installed("gemma4-e2b"))
         finally:
-            del os.environ["CICADA_OFFLINE_MODELS"]
+            del os.environ["SENADA_MODELS"]
 
 
 if __name__ == "__main__":

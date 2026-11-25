@@ -10,7 +10,8 @@ if not exist ".venv\Scripts\python.exe" (
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt || goto :fail
 rmdir /s /q ".pip-cache" 2>nul
 echo.
-echo Selesai. Buka "Cicada Offline.cmd". Unduh model di tab Model saat pertama kali.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\shortcut.ps1" || echo Shortcut tidak dibuat; aplikasi tetap bisa dibuka lewat Senada.cmd.
+echo Selesai. Buka shortcut Senada di Desktop atau Start. Unduh model di tab Model saat pertama kali.
 pause
 exit /b 0
 :fail

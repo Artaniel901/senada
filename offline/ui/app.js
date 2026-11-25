@@ -1,5 +1,5 @@
-// Cicada Offline page. Python is window.pywebview.api (app.py's Api); what it reports arrives
-// through window.cicadaEvent. Built with DOM calls and textContent only: translated text is never HTML.
+// Senada page. Python is window.pywebview.api (app.py's Api); what it reports arrives
+// through window.senadaEvent. Built with DOM calls and textContent only: translated text is never HTML.
 'use strict';
 
 const $ = (id) => document.getElementById(id);
@@ -14,9 +14,11 @@ let api = null;
 // ───────── events from Python ─────────
 const handlers = {};
 const on = (type, fn) => (handlers[type] ||= []).push(fn);
-window.cicadaEvent = (e) => (handlers[e.type] || []).forEach((fn) => fn(e));
+window.senadaEvent = (e) => (handlers[e.type] || []).forEach((fn) => fn(e));
 
 const toast = (msg) => $('toast').show(msg);
+// Over 200 languages: the list is alphabetical by Indonesian name, so typing a letter jumps to it.
+const byName = () => [...state.langs].sort((a, b) => a.name.localeCompare(b.name, 'id'));
 const langName = (id) => (id === 'auto' ? 'Deteksi' : state.byId[id]?.name || id);
 const clock = (t) => {
   const s = Math.max(0, Math.round(t));
@@ -46,7 +48,7 @@ class LangBar {
     tabs.addEventListener('change', (e) => this.set(e.detail.value, false));
     const more = el('select', { title: 'Bahasa lain' });
     more.append(el('option', { value: '', textContent: 'Bahasa lain…' }));
-    for (const l of state.langs) {
+    for (const l of byName()) {
       if (this.speechOnly && !l.speech) continue;
       if (l.favorite) continue;
       more.append(el('option', { value: l.id, textContent: `${l.name} · ${l.native}` }));
@@ -185,7 +187,7 @@ function setupLive() {
   radio.addEventListener('change', () => save({ liveSource: radio.value }));
   const src = $('liveSrc');
   src.append(el('option', { value: 'auto', textContent: 'Deteksi otomatis' }));
-  for (const l of state.langs.filter((l) => l.speech)) src.append(el('option', { value: l.id, textContent: `${l.name} · ${l.native}` }));
+  for (const l of byName().filter((l) => l.speech)) src.append(el('option', { value: l.id, textContent: `${l.name} · ${l.native}` }));
   src.value = state.settings.liveSrc;
   src.addEventListener('change', () => save({ liveSrc: src.value }));
   liveTgtBar = new LangBar($('liveTgtBar'), { value: state.settings.liveTgt, onChange: (v) => { save({ liveTgt: v }); api.set_live_target(v); } });

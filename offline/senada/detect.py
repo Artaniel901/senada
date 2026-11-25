@@ -22,6 +22,14 @@ _SCRIPTS = [
     ("ta", re.compile(r"[஀-௿]")),
     ("te", re.compile(r"[ఀ-౿]")),
     ("si", re.compile(r"[඀-෿]")),
+    ("gu", re.compile(r"[઀-૿]")),
+    ("pa", re.compile(r"[਀-੿]")),
+    ("kn", re.compile(r"[ಀ-೿]")),
+    ("ml", re.compile(r"[ഀ-ൿ]")),
+    ("or", re.compile(r"[଀-୿]")),
+    ("bo", re.compile(r"[ༀ-࿿]")),
+    ("sat", re.compile(r"[᱐-᱿]")),
+    ("tzm", re.compile(r"[ⴰ-⵿]")),
     ("am", re.compile(r"[ሀ-፿]")),
 ]
 _HAN = re.compile(r"[一-鿿]")

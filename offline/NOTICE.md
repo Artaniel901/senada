@@ -1,6 +1,6 @@
 # Notices
 
-Cicada Offline is part of a fork of **Cicada** (https://github.com/wquguru/cicada),
+Senada (formerly Cicada Offline) is part of a fork of **Cicada** (https://github.com/wquguru/cicada),
 Copyright wquguru, licensed under the Apache License 2.0 (see `../LICENSE`). It imports the
 upstream Linux engine in `../linux/cicada/core` unchanged.
 

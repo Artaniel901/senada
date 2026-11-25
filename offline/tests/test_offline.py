@@ -9,12 +9,12 @@ import unittest
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-os.environ["CICADA_OFFLINE_HOME"] = tempfile.mkdtemp(prefix="cicada-offline-test-")
+os.environ["SENADA_HOME"] = tempfile.mkdtemp(prefix="senada-test-")
 
-from cicada_offline import catalog, detect, export, languages  # noqa: E402
-from cicada_offline.core import TranscriptLine  # noqa: E402
-from cicada_offline.store import History, Settings  # noqa: E402
-from cicada_offline.translate import split_sentences  # noqa: E402
+from senada import catalog, detect, export, languages  # noqa: E402
+from senada.core import TranscriptLine  # noqa: E402
+from senada.store import History, Settings  # noqa: E402
+from senada.translate import split_sentences  # noqa: E402
 
 
 class Languages(unittest.TestCase):
@@ -26,6 +26,22 @@ class Languages(unittest.TestCase):
     def test_every_language_has_an_nllb_code(self):
         for l in languages.LANGUAGES:
             self.assertRegex(l.nllb, r"^[a-z]{3}_[A-Z][a-z]{3}$", l.id)
+
+    def test_all_of_nllb_once(self):
+        codes = [l.nllb for l in languages.LANGUAGES]
+        self.assertEqual(len(codes), 202)  # NLLB-200's full list
+        self.assertEqual(len(set(codes)), 202)
+        self.assertEqual(sum(1 for l in languages.LANGUAGES if l.whisper), 98)
+
+    def test_installed_model_knows_every_code(self):
+        vocab = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "models", "nllb-1.3b", "shared_vocabulary.json")
+        if not os.path.exists(vocab):
+            self.skipTest("NLLB not downloaded")
+        import json
+        with open(vocab, encoding="utf-8") as f:
+            known = set(json.load(f))
+        self.assertEqual([l.nllb for l in languages.LANGUAGES if l.nllb not in known], [])
 
     def test_whisper_codes_map_back(self):
         self.assertEqual(languages.from_whisper("ko").id, "ko")
@@ -48,6 +64,9 @@ class Detect(unittest.TestCase):
         self.assertEqual(detect.detect("今日はいい天気ですね"), "ja")
         self.assertEqual(detect.detect("今天天气很好"), "zh")
         self.assertEqual(detect.detect("สวัสดีครับ"), "th")
+        self.assertEqual(detect.detect("ನಮಸ್ಕಾರ"), "kn")
+        self.assertEqual(detect.detect("ਸਤ ਸ੍ਰੀ ਅਕਾਲ"), "pa")
+        self.assertEqual(detect.detect("ⴰⵣⵓⵍ"), "tzm")
 
     def test_latin_languages(self):
         self.assertEqual(detect.detect("Saya sedang menulis tesis tentang kondensasi dan hasilnya belum ada"), "id")
@@ -101,7 +120,7 @@ class TranslatorPlumbing(unittest.TestCase):
     def make(self):
         from collections import OrderedDict
         import threading
-        from cicada_offline.translate import Translator
+        from senada.translate import Translator
         t = Translator.__new__(Translator)
         t.model, t.sp, t.device, t.model_id = FakeModel(), FakeSp(), "cpu", "fake"
         t._cache, t._gate = OrderedDict(), threading.Lock()
@@ -162,8 +181,8 @@ class Export(unittest.TestCase):
 
 class Titles(unittest.TestCase):
     def test_indonesian_title_unless_renamed(self):
-        from cicada_offline.app import Api
-        from cicada_offline.core import Session
+        from senada.app import Api
+        from senada.core import Session
         s = Session(id="x", title="会议 11月25日 18:06", startedAt=datetime(2026, 11, 25, 9, 6, tzinfo=timezone.utc))
         self.assertTrue(Api._title(s).startswith("Rekaman 25 Nov "))
         s.renamed, s.title = True, "Kuliah termodinamika"

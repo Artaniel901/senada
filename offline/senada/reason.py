@@ -1,7 +1,7 @@
 """Penalar: a local language model (Gemma 4 through llama.cpp's llama-server, Vulkan) that translates what
 was MEANT. NLLB turns one sentence into another; this reads the lines before it, the topic and the user's
 word list, so idioms, slang, unfinished spoken sentences and misheard terms come out as natural,
-grammatical text. NLLB stays as the fallback and for the regional languages Gemma barely knows.
+grammatical text. NLLB stays as the fallback and for the languages Gemma barely knows.
 
 The server listens on 127.0.0.1 only, on a free port, behind a random key, and sits in a Windows job
 object so it dies with the app (a left-over server would hold gigabytes of GPU memory)."""
@@ -22,8 +22,16 @@ from dataclasses import dataclass, field
 
 from . import catalog, languages, paths
 
-# Text-only regional languages: NLLB was trained on them, Gemma hardly.
-NLLB_ONLY = {"min", "ban", "bjn", "bug", "ace"}
+# The languages Gemma 4 writes well. The rest of NLLB-200 (Indonesia's regional languages, Arabic as
+# spoken, many African and minority languages) goes to NLLB, which was trained on each of them.
+PENALAR = {
+    "id", "ko", "en", "ja", "zh", "zh-Hant", "yue", "ms", "jv", "su", "tl", "vi", "th", "km", "lo", "my",
+    "hi", "bn", "ur", "ta", "te", "ne", "si", "mr", "gu", "pa", "kn", "ml", "or", "as", "ps", "sd",
+    "ar", "fa", "he", "tr", "ru", "uk", "kk", "uz", "mn", "ky", "tg", "tk", "tt", "az", "ka", "hy",
+    "de", "fr", "es", "pt", "it", "nl", "pl", "cs", "sk", "hu", "ro", "bg", "el", "sr", "hr", "sl", "bs",
+    "mk", "sq", "be", "sv", "no", "nn", "da", "fi", "et", "lv", "lt", "is", "ga", "cy", "mt", "lb",
+    "ca", "eu", "gl", "eo", "sw", "am", "yo", "ha", "so", "af", "zu", "xh", "ig", "rw", "mg", "ceb", "ht",
+}
 
 ENGLISH = {
     "id": "Indonesian", "ko": "Korean", "en": "English", "ja": "Japanese", "zh": "Simplified Chinese",
@@ -35,10 +43,39 @@ ENGLISH = {
     "uk": "Ukrainian", "kk": "Kazakh", "uz": "Uzbek", "mn": "Mongolian", "de": "German", "fr": "French",
     "es": "Spanish", "pt": "Portuguese", "it": "Italian", "nl": "Dutch", "pl": "Polish", "cs": "Czech",
     "sk": "Slovak", "hu": "Hungarian", "ro": "Romanian", "bg": "Bulgarian", "el": "Greek", "sr": "Serbian",
-    "hr": "Croatian", "sl": "Slovenian", "sv": "Swedish", "no": "Norwegian", "da": "Danish", "fi": "Finnish",
-    "et": "Estonian", "lv": "Latvian", "lt": "Lithuanian", "ca": "Catalan", "eu": "Basque", "gl": "Galician",
-    "cy": "Welsh", "ka": "Georgian", "hy": "Armenian", "az": "Azerbaijani", "sw": "Swahili", "am": "Amharic",
-    "yo": "Yoruba", "ha": "Hausa", "so": "Somali", "af": "Afrikaans",
+    "hr": "Croatian", "sl": "Slovenian", "sv": "Swedish", "no": "Norwegian Bokmål", "da": "Danish",
+    "fi": "Finnish", "et": "Estonian", "lv": "Latvian", "lt": "Lithuanian", "ca": "Catalan", "eu": "Basque",
+    "gl": "Galician", "cy": "Welsh", "ka": "Georgian", "hy": "Armenian", "az": "Azerbaijani", "sw": "Swahili",
+    "am": "Amharic", "yo": "Yoruba", "ha": "Hausa", "so": "Somali", "af": "Afrikaans",
+    "mr": "Marathi", "gu": "Gujarati", "pa": "Punjabi", "kn": "Kannada", "ml": "Malayalam", "or": "Odia",
+    "as": "Assamese", "sd": "Sindhi", "ps": "Pashto", "prs": "Dari", "ks": "Kashmiri (Arabic script)",
+    "ks-Deva": "Kashmiri (Devanagari)", "sa": "Sanskrit", "mai": "Maithili", "bho": "Bhojpuri",
+    "awa": "Awadhi", "mag": "Magahi", "hne": "Chhattisgarhi", "mni": "Meitei (Manipuri)", "sat": "Santali",
+    "lus": "Mizo", "bo": "Tibetan", "dz": "Dzongkha", "ky": "Kyrgyz", "tg": "Tajik", "tk": "Turkmen",
+    "tt": "Tatar", "ba": "Bashkir", "ug": "Uyghur", "azb": "South Azerbaijani", "crh": "Crimean Tatar",
+    "shn": "Shan", "kac": "Jingpho (Kachin)", "ceb": "Cebuano", "ilo": "Ilocano", "war": "Waray",
+    "pag": "Pangasinan", "ace-Arab": "Acehnese (Jawi script)", "bjn-Arab": "Banjarese (Jawi script)",
+    "tpi": "Tok Pisin", "fj": "Fijian", "sm": "Samoan", "mi": "Maori",
+    "arz": "Egyptian Arabic", "ary": "Moroccan Arabic", "aeb": "Tunisian Arabic",
+    "apc": "North Levantine Arabic", "ajp": "South Levantine Arabic", "acm": "Mesopotamian (Iraqi) Arabic",
+    "acq": "Ta'izzi-Adeni Arabic", "ars": "Najdi Arabic", "ckb": "Central Kurdish (Sorani)",
+    "ku": "Northern Kurdish (Kurmanji)", "yi": "Yiddish",
+    "is": "Icelandic", "fo": "Faroese", "nn": "Norwegian Nynorsk", "ga": "Irish", "gd": "Scottish Gaelic",
+    "lb": "Luxembourgish", "li": "Limburgish", "mt": "Maltese", "mk": "Macedonian", "sq": "Albanian",
+    "bs": "Bosnian", "be": "Belarusian", "ltg": "Latgalian", "szl": "Silesian", "oc": "Occitan",
+    "ast": "Asturian", "sc": "Sardinian", "scn": "Sicilian", "vec": "Venetian", "lij": "Ligurian",
+    "lmo": "Lombard", "fur": "Friulian", "eo": "Esperanto",
+    "ht": "Haitian Creole", "pap": "Papiamento", "qu": "Ayacucho Quechua", "ay": "Aymara", "gn": "Guarani",
+    "zu": "Zulu", "xh": "Xhosa", "ig": "Igbo", "rw": "Kinyarwanda", "rn": "Kirundi", "mg": "Malagasy",
+    "ln": "Lingala", "sn": "Shona", "ny": "Chichewa", "st": "Southern Sotho", "nso": "Northern Sotho",
+    "tn": "Tswana", "ts": "Tsonga", "ss": "Swati", "ti": "Tigrinya", "om": "Oromo", "lg": "Luganda",
+    "luo": "Luo", "ki": "Kikuyu", "kam": "Kamba", "wo": "Wolof", "ff": "Fula (Nigerian Fulfulde)",
+    "bm": "Bambara", "ak": "Akan", "tw": "Twi", "ee": "Ewe", "fon": "Fon", "mos": "Mossi", "dyu": "Dyula",
+    "kbp": "Kabiye", "kea": "Cape Verdean Creole", "sg": "Sango", "kg": "Kikongo", "lua": "Luba-Kasai",
+    "kmb": "Kimbundu", "umb": "Umbundu", "cjk": "Chokwe", "bem": "Bemba", "tum": "Tumbuka", "din": "Dinka",
+    "nus": "Nuer", "kab": "Kabyle", "tzm": "Central Atlas Tamazight", "taq": "Tamasheq (Latin script)",
+    "taq-Tfng": "Tamasheq (Tifinagh script)", "knc": "Central Kanuri (Latin script)",
+    "knc-Arab": "Central Kanuri (Arabic script)",
 }
 
 
@@ -47,8 +84,8 @@ def english(lang: str) -> str:
 
 
 def handles(src: str, tgt: str) -> bool:
-    """Whether Penalar takes this pair; the regional languages go to NLLB."""
-    return src not in NLLB_ONLY and tgt not in NLLB_ONLY
+    """Whether Penalar takes this pair; a pair with a language Gemma barely knows goes to NLLB."""
+    return src in PENALAR and tgt in PENALAR
 
 
 _MEANING = """- Translate what is MEANT, not word by word. Idioms, slang and set phrases become the natural {tgt} way to say the same thing.

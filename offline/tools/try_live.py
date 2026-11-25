@@ -2,7 +2,7 @@
 
     python -X utf8 tools/try_live.py [--penalar [model]] [--topic T] [--words W] <target-lang> <file.wav> [more.wav ...]
 
-Records go to a throwaway folder (CICADA_OFFLINE_HOME, or a temp dir); models come from the app."""
+Records go to a throwaway folder (SENADA_HOME, or a temp dir); models come from the app."""
 from __future__ import annotations
 
 import os
@@ -12,16 +12,16 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-os.environ.setdefault("CICADA_OFFLINE_HOME", tempfile.mkdtemp(prefix="cicada-offline-try-"))
+os.environ.setdefault("SENADA_HOME", tempfile.mkdtemp(prefix="senada-try-"))
 
-from cicada_offline import catalog, paths  # noqa: E402
+from senada import catalog, paths  # noqa: E402
 
 catalog.use_gpu_libraries()
 
-from cicada_offline.asr import Recognizer  # noqa: E402
-from cicada_offline.core import Paths, SessionStore  # noqa: E402
-from cicada_offline.live import LiveSession  # noqa: E402
-from cicada_offline.translate import Translator  # noqa: E402
+from senada.asr import Recognizer  # noqa: E402
+from senada.core import Paths, SessionStore  # noqa: E402
+from senada.live import LiveSession  # noqa: E402
+from senada.translate import Translator  # noqa: E402
 
 
 def main(argv: list[str]) -> int:
@@ -31,7 +31,7 @@ def main(argv: list[str]) -> int:
         flag = argv.pop(0)
         if flag == "--penalar":
             model = argv.pop(0) if argv and argv[0] in catalog.BY_ID else catalog.DEFAULT["llm"]
-            from cicada_offline.reason import Reasoner
+            from senada.reason import Reasoner
             reasoner = Reasoner(model)
         elif flag == "--topic":
             topic = argv.pop(0)

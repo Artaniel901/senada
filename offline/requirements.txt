@@ -1,4 +1,4 @@
-# Cicada Offline engine and window. Versions pinned to the set tested on Windows 11 x64, Python 3.12.
+# Senada engine and window. Versions pinned to the set tested on Windows 11 x64, Python 3.12.
 faster-whisper==1.2.1
 ctranslate2==4.9.1
 sentencepiece==0.2.3

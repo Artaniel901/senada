@@ -1,4 +1,4 @@
-"""The engines Cicada Offline can download, and the downloader. The only time the app goes online is
+"""The engines Senada can download, and the downloader. The only time the app goes online is
 here, once per model, from Hugging Face; after that everything runs on this computer.
 
 Files are fetched straight from huggingface.co (not through huggingface_hub, whose cache lives on C:),
@@ -113,7 +113,7 @@ def download_gpu(progress=None, cancelled=lambda: False) -> None:
     done = 0
     with urllib.request.urlopen(f"https://pypi.org/pypi/{GPU['package']}/{GPU['version']}/json", timeout=30) as r:
         url = next(f["url"] for f in json.load(r)["urls"] if f["filename"] == GPU["file"])
-    req = urllib.request.Request(url, headers={"User-Agent": "cicada-offline"})
+    req = urllib.request.Request(url, headers={"User-Agent": "senada"})
     with urllib.request.urlopen(req, timeout=60) as r, open(wheel, "wb") as out:
         total = int(r.headers.get("Content-Length") or GPU["size"])
         while chunk := r.read(1 << 20):
@@ -156,13 +156,13 @@ def download_llama(progress=None, cancelled=lambda: False) -> None:
     if os.path.exists(marker):
         os.remove(marker)
     req = urllib.request.Request(f"https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/{LLAMA['tag']}",
-                                 headers={"User-Agent": "cicada-offline", "Accept": "application/vnd.github+json"})
+                                 headers={"User-Agent": "senada", "Accept": "application/vnd.github+json"})
     with urllib.request.urlopen(req, timeout=30) as r:
         url = next(a["browser_download_url"] for a in json.load(r)["assets"] if a["name"] == LLAMA["asset"])
     part = os.path.join(d, "llama.zip.part")
     digest = hashlib.sha256()
     done = 0
-    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "cicada-offline"}), timeout=60) as r,             open(part, "wb") as out:
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "senada"}), timeout=60) as r,             open(part, "wb") as out:
         total = int(r.headers.get("Content-Length") or LLAMA["size"])
         while chunk := r.read(1 << 20):
             if cancelled():
@@ -255,7 +255,7 @@ def download(model_id: str, progress=None, cancelled=lambda: False) -> None:
             continue
         part = target + ".part"
         digest = hashlib.sha256()
-        req = urllib.request.Request(f"{HF}/{repo}/resolve/main/{name}", headers={"User-Agent": "cicada-offline"})
+        req = urllib.request.Request(f"{HF}/{repo}/resolve/main/{name}", headers={"User-Agent": "senada"})
         with urllib.request.urlopen(req, timeout=60) as r, open(part, "wb") as out:
             while chunk := r.read(1 << 20):
                 if cancelled():
