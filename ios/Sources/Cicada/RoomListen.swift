@@ -828,6 +828,7 @@ final class RoomAudio: @unchecked Sendable {
     private let voiceFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false)!
     private var stream: RecognitionStream?
     private var recorder: AVAudioFile?
+    private var recordGain = AutoGain()
     private var recordingURL: URL?
     /// Recognizer-clock seconds of audio appended, and the voice ring (its first sample's time).
     private var fed = 0.0
@@ -893,6 +894,7 @@ final class RoomAudio: @unchecked Sendable {
         queue.sync {
             stream = recognizer
             recordingURL = recording
+            recordGain = AutoGain()
             fed = 0
             ring = []
             ringStart = 0
@@ -977,7 +979,11 @@ final class RoomAudio: @unchecked Sendable {
         guard let v = toVoice.convert(buffer, to: voiceFormat), let p = v.floatChannelData?[0] else { return }
         let n = Int(v.frameLength)
         if recorder == nil, let url = recordingURL { recorder = AudioFileWriter.open(url, format: voiceFormat) }
-        try? recorder?.write(from: v)
+        // The file gets speech level (AutoGain); recognizer and voiceprints keep the room as heard.
+        if let recorder, let loud = v.copy() as? AVAudioPCMBuffer, let q = loud.floatChannelData?[0] {
+            recordGain.apply(q, count: n)
+            try? recorder.write(from: loud)
+        }
         if keeping {
             kept.append(v)
             keptFrames += n

@@ -630,6 +630,8 @@ final class RecordPlayer: ObservableObject {
         ended = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: p.currentItem, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.playing = false }
         }
+        // Recordings made before RoomAudio leveled them are too quiet to hear: leveled as they play.
+        if own, let item = p.currentItem { Task { await GainTap.attach(to: item) } }
         Task {
             if let d = try? await p.currentItem?.asset.load(.duration).seconds, d.isFinite { duration = d }
         }
