@@ -183,6 +183,7 @@ struct LivePhone: View {
                 EndingStrip()
                 ModelWaitCard()
                 TranslateDownCard()
+                NotesStatusLine()
                 if let id = room.sessionID { FixAskCard(fixes: model.fixes, session: id) }
             }
             .padding(.horizontal, 16)
@@ -347,6 +348,7 @@ struct LivePad: View {
             EndingStrip().frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
             ModelWaitCard().frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
             TranslateDownCard().frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
+            NotesStatusLine().frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
             if let id = room.sessionID {
                 FixAskCard(fixes: model.fixes, session: id).frame(maxWidth: 560).padding(.horizontal, 20).padding(.top, 18)
             }
@@ -484,6 +486,65 @@ struct StartProblemCard: View {
         case .model(let m) where m.cause == .disk: return (L("打开 iPhone 设置"), settings)
         case .model(let m) where m.cause == .offline: return nil
         default: return (L("再试一次"), { room.retry() })
+        }
+    }
+}
+
+/// The notes' trouble while listening, in one line, as the Mac's notes window: a dead key stops
+/// them (换 key), a busy or unreachable service only delays them (改用 Ling when there is its key),
+/// and the subtitles carry on either way.
+struct NotesStatusLine: View {
+    @EnvironmentObject var model: AppModel
+    @EnvironmentObject var room: RoomListen
+    @EnvironmentObject var notes: NotesEngine
+    @EnvironmentObject var ling: LingClient
+
+    var body: some View {
+        if room.isRunning, let (text, needsYou, action) = line {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: needsYou ? "exclamationmark.triangle.fill" : "hourglass")
+                    .foregroundStyle(needsYou ? Ink.accent : Ink.secondary).padding(.top, 2)
+                Text(text).font(.subheadline).foregroundStyle(Ink.ink).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                if let (label, act) = action {
+                    Button(action: act) {
+                        Text(label).font(.subheadline.weight(.semibold)).foregroundStyle(Ink.ink)
+                            .padding(.horizontal, 12).frame(minHeight: 32)
+                            .background(Ink.ground, in: Capsule())
+                    }
+                    .buttonStyle(.plain).frame(minHeight: 44)
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+
+    /// Where the notes stopped, in meeting time; 0 before they covered anything.
+    private var lastCovered: Double {
+        guard let s = model.store.session(room.sessionID), notes.notes.covered > 0, notes.notes.covered <= s.lines.count else { return 0 }
+        return s.lines[notes.notes.covered - 1].t
+    }
+
+    private var line: (String, Bool, (String, () -> Void)?)? {
+        let service = ling.serviceLabel
+        let unreachable = ling.aiCheck.failure?.reason == .unreachable
+        switch notes.state {
+        case .invalidKey:
+            return (lastCovered > 0 ? L("key 失效了 · 纪要停在 \(NotesEngine.clock(lastCovered))") : L("key 失效了 · 纪要等新的 key"), true,
+                    (L("换 key"), { model.tab = .settings; model.showSettings = true }))
+        case .rateLimited:
+            return (L("\(service) 很忙 · 纪要稍后补上，字幕照常"), false, nil)
+        case .unreachable where unreachable, .updating where unreachable:
+            // 语音和文字只发给你的服务: TranslateDownCard says it, and 改用 Ling would send the meeting elsewhere.
+            if model.translationHealth.googleOff, model.translationHealth.sentencesUntranslated { return nil }
+            return (lastCovered > 0 ? L("纪要等 \(service) 恢复 · 停在 \(NotesEngine.clock(lastCovered))，字幕照常") : L("纪要等 \(service) 恢复 · 字幕照常"),
+                    false, model.canSwitchToLing ? (L("改用 Ling"), { model.switchToLing() }) : nil)
+        case .failed:
+            return (L("这轮纪要没写好 · 下轮自动补上"), false, nil)
+        default:
+            return nil
         }
     }
 }

@@ -188,6 +188,8 @@ extension AppModel {
         case "recordTrack":
             // recordTrack:on|off, 会后重听 for the next meeting (as the Mac's lsctl recordTrack:off).
             RoomListen.recordTrackOff = arg == "off"
+        case "switchToLing":
+            switchToLing()
         case "startRetry":
             // 再试一次 on the card under 开始听.
             room.retry()

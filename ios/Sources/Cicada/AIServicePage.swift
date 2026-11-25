@@ -239,6 +239,15 @@ extension LingClient {
 }
 
 extension AppModel {
+    /// 改用 Ling: another service can't be reached and a Ling key is here.
+    var canSwitchToLing: Bool { AIPrefs.current.id != .ling && AIKey.read("ling") != nil }
+
+    func switchToLing() {
+        guard canSwitchToLing else { return }
+        UserDefaults.standard.set(AIProvider.Kind.ling.rawValue, forKey: AIPrefs.provider)
+        aiChanged()
+    }
+
     /// The service, its address or a model changed: LingClient checks again and 面对面 takes the
     /// service's voices.
     func aiChanged() {
