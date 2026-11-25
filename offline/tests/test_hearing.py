@@ -30,6 +30,11 @@ class Plausible(unittest.TestCase):
         self.assertFalse(speech.plausible("aaaaaaaaaaa", "id"))
         self.assertFalse(speech.plausible("", "id"))
 
+    def test_one_word_over_and_over_is_noise(self):
+        # From a real mic session: a tap on the laptop heard as this.
+        self.assertFalse(speech.plausible("dis dis dis dis dis", "id"))
+        self.assertTrue(speech.plausible("Iya, iya, iya, iya, betul sekali itu yang saya maksud kemarin sore.", "id"))
+
     def test_wrong_script_for_the_language(self):
         self.assertFalse(speech.plausible("Halo semuanya apa kabar", "ko"))
         self.assertTrue(speech.plausible("Halo semuanya apa kabar", None))
@@ -96,6 +101,113 @@ class Segmenter(unittest.TestCase):
         seg.flush()
         self.assertEqual(out, [])
         self.assertLess(len(seg._buf), 16000)  # the waiting audio doesn't grow without speech
+
+
+class Joining(unittest.TestCase):
+    """Scraps like "mana" or "THIS" came out alone and misheard; a breath inside a sentence must not cut it."""
+    S = 16000
+
+    def spans(self, *pairs):
+        return speech.SpeechSegmenter()._join([{"start": int(a * self.S), "end": int(b * self.S)} for a, b in pairs])
+
+    def test_short_scrap_joins_the_speech_after_it(self):
+        self.assertEqual(self.spans((0, 0.5), (0.9, 3.0)), [{"start": 0, "end": 3 * self.S}])
+
+    def test_short_scrap_alone_after_a_long_quiet(self):
+        self.assertEqual(len(self.spans((0, 0.5), (2.0, 3.0))), 2)
+
+    def test_full_sentences_stay_apart(self):
+        self.assertEqual(len(self.spans((0, 2.0), (2.5, 4.0))), 2)
+
+
+class Partial(unittest.TestCase):
+    def test_a_sentence_still_spoken_is_handed_over_while_it_goes_on(self):
+        import numpy as np
+        seg = speech.SpeechSegmenter()
+        looks, done = [], []
+        seg.on_partial, seg.on_segment = looks.append, done.append
+        # Stand in for the voice detector: one span from 0.5 s to the end of what has arrived.
+        import faster_whisper.vad as vad
+        real = vad.get_speech_timestamps
+        vad.get_speech_timestamps = lambda audio, *a, **k: [{"start": 8000, "end": len(audio)}]
+        try:
+            for _ in range(40):  # 4 s of "speech", 100 ms at a time
+                seg.feed(np.full(1600, 1000, dtype=np.int16).tobytes())
+        finally:
+            vad.get_speech_timestamps = real
+        self.assertEqual(done, [])
+        self.assertGreaterEqual(len(looks), 3)  # about one look every 0.8 s
+        self.assertEqual(looks[0].start, 0.5)
+
+
+class FakeHearing:
+    def hear(self, samples, language=None, candidates=None, prompt="", fallback=True):
+        return asr.Heard(text="Kita mulai rapatnya sekarang.", lang=language or "id", probability=1.0)
+
+
+class FakePenalar:
+    alive = True
+
+    def __init__(self):
+        self.calls = 0
+
+    def translate_line(self, *a, **k):
+        self.calls += 1
+        from senada.reason import Line
+        return Line("We start the meeting now.", [], "")
+
+
+class FakeNllb:
+    def translate(self, text, src, tgt, beam=2):
+        return "NLLB: " + text
+
+
+class FakeStore:
+    def __init__(self):
+        self.lines = []
+
+    def append(self, sid, line):
+        self.lines.append(line)
+
+
+class Pipeline(unittest.TestCase):
+    """Words show the moment Whisper has them; Penalar only fills in, and steps aside when lines pile up."""
+
+    def session(self):
+        from senada.live import LiveSession
+        events = []
+        s = LiveSession(FakeHearing(), FakeNllb(), FakeStore(), "mic", "id", "en", events.append, reasoner=FakePenalar())
+        return s, events
+
+    def test_heard_words_show_before_the_translation(self):
+        s, events = self.session()
+        s._hear(speech.Stretch(b"\0" * 3200, 1.0, 1))
+        self.assertEqual([e["type"] for e in events], ["line"])
+        self.assertTrue(events[0]["translating"])
+        self.assertEqual(events[0]["src"], "Kita mulai rapatnya sekarang.")
+        self.assertEqual(s._finish.qsize(), 1)
+        s._complete(*s._finish.get())
+        self.assertEqual(events[-1]["dst"], "We start the meeting now.")
+        self.assertEqual(s.reasoner.calls, 1)
+
+    def test_lines_waiting_behind_go_to_nllb(self):
+        s, events = self.session()
+        s._hear(speech.Stretch(b"\0" * 3200, 1.0, 1))
+        s._hear(speech.Stretch(b"\0" * 3200, 4.0, 2))
+        s._complete(*s._finish.get())  # one more is waiting: no Penalar for this one
+        self.assertEqual(events[-1]["dst"], "NLLB: Kita mulai rapatnya sekarang.")
+        s._complete(*s._finish.get())  # the last one has Penalar again
+        self.assertEqual(events[-1]["dst"], "We start the meeting now.")
+        self.assertEqual(s.reasoner.calls, 1)
+
+    def test_whisper_hears_with_the_users_terms_only(self):
+        s, _ = self.session()
+        s.hints = lambda: ("", "fluks massa\nKookmin University")
+        asked = []
+        s.recognizer.hear = lambda samples, **k: asked.append(k.get("prompt")) or FakeHearing().hear(samples, **k)
+        s._hear(speech.Stretch(b"\0" * 3200, 1.0, 1))
+        s._hear(speech.Stretch(b"\0" * 3200, 4.0, 2))  # not the sentence before: it misled Whisper on FLEURS
+        self.assertEqual(asked, ["fluks massa, Kookmin University."] * 2)
 
 
 class Settings(unittest.TestCase):

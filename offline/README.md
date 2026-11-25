@@ -127,6 +127,10 @@ Yang baru ada di `senada/`:
 - `tools/get_fleurs.py <folder> id_id:25 ko_kr:25 en_us:25` mengambil potongan rekaman orang dari
   Google FLEURS (CC-BY 4.0) tanpa mengunduh arsip penuhnya; `tools/try_hearing.py --hear id,ko,en <folder>`
   menghitung bahasa yang terdengar benar, kata yang salah dan waktu Whisper per klip.
+- `tools/try_delay.py [--penalar] [--laptop] <folder-fleurs/id_id> <tujuan>` memutar klip FLEURS
+  bersambung secepat orang bicara lewat alur Suara langsung, lalu mengukur berapa detik setelah kalimat
+  selesai kata-katanya muncul, kapan terjemahannya jadi, dan persentase kata yang salah. `--laptop`
+  meniru suara pelan di mikrofon laptop; `--fast` hanya untuk persentase kata salah.
 - `tools/make_icon.py` menggambar ulang `senada.ico` dari `ui/senada.svg` (butuh Chrome atau Edge).
 - `SENADA_HOME` memindahkan folder `data/`, misalnya untuk uji.
 - `SENADA_MODELS` memindahkan folder `models/`.

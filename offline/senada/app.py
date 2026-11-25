@@ -160,7 +160,7 @@ class Api:
     def _emit(self, event: dict) -> None:
         payload = json.dumps(event, ensure_ascii=False)
         for name, w in list(self._windows.items()):
-            if name == "overlay" and event.get("type") not in ("line", "overlay-style", "stopped", "started"):
+            if name == "overlay" and event.get("type") not in ("line", "partial", "overlay-style", "stopped", "started"):
                 continue
             try:
                 w.evaluate_js(f"window.senadaEvent && window.senadaEvent({payload})")

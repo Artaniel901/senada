@@ -33,6 +33,11 @@
   let clearTimer = null;
   window.senadaEvent = (e) => {
     if (e.type === 'overlay-style') document.body.style.setProperty('--size', `${e.size}px`);
+    if (e.type === 'partial') {  // the words still being spoken, small above the last subtitle
+      document.body.classList.remove('idle');
+      document.getElementById('src').textContent = e.src;
+      clearTimeout(clearTimer);
+    }
     if (e.type === 'line') {
       document.body.classList.remove('idle');
       document.getElementById('src').textContent = e.dst ? e.src : '';

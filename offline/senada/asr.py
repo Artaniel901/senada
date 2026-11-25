@@ -42,10 +42,14 @@ class Recognizer:
             self.model = WhisperModel(folder, device="cpu", compute_type="int8", cpu_threads=threads())
         self._gate = threading.Lock()
 
-    def hear(self, pcm16, language: str | None = None, beam: int = 1, candidates=None) -> Heard:
+    def hear(self, pcm16, language: str | None = None, beam: int = 1, candidates=None, prompt: str = "",
+             fallback: bool = True) -> Heard:
         """`language` is a language id to listen for, or None to let Whisper tell. With `candidates`
         (language ids), Whisper only chooses among them: asked to pick from all 99, Whisper small called
-        Indonesian Javanese and Vietnamese, and wrote one line in Khmer."""
+        Indonesian Javanese and Vietnamese, and wrote one line in Khmer. `prompt`: what was said just before
+        and the user's own terms, so names and topic words come out spelled as meant. `fallback`: retry
+        at higher temperatures when the first pass looks wrong (off for the quick look at a sentence
+        still being spoken)."""
         import numpy as np
 
         audio = np.frombuffer(bytes(pcm16), dtype=np.int16).astype(np.float32) / 32768.0
@@ -57,7 +61,8 @@ class Recognizer:
             segments, info = self.model.transcribe(
                 audio, language=code, beam_size=beam, vad_filter=False, condition_on_previous_text=False,
                 without_timestamps=True, no_speech_threshold=0.6, log_prob_threshold=-1.0,
-                compression_ratio_threshold=2.4, temperature=(0.0, 0.2, 0.4))
+                compression_ratio_threshold=2.4, temperature=(0.0, 0.2, 0.4) if fallback else 0.0,
+                initial_prompt=prompt[-400:] or None)
             kept = [s for s in segments if _speech(s)]
         text = " ".join(s.text.strip() for s in kept).strip()
         if language:

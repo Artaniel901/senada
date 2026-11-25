@@ -5,7 +5,13 @@ so a slow sentence never jumps ahead of the next.
 
 Language: with "auto", Whisper picks one of the languages the user expects to hear (`candidates`) for
 every stretch; confident stretches agreeing make it the meeting's language (Cicada's hint and votes),
-used only when Whisper is unsure of a stretch."""
+used only when Whisper is unsure of a stretch.
+
+Two workers, so nothing waits on Penalar: the hearing worker shows each sentence's words the moment
+Whisper has them (and, between sentences, a quick look at the one still being spoken), the finishing
+worker then translates or fixes it in place. When sentences pile up behind Penalar, the ones waiting go
+to NLLB, so the transcript keeps up with the speaker. Measured on FLEURS Indonesian at laptop-mic
+level (tools/try_delay.py): words shown 2.2 -> 5.6 s after each sentence ended, before this."""
 from __future__ import annotations
 
 import queue
@@ -67,7 +73,10 @@ class LiveSession:
         self.hint: str | None = None if src == "auto" else src
         self._candidate: str | None = None
         self._votes = 0
-        self._queue: queue.Queue = queue.Queue()
+        self._queue: queue.Queue = queue.Queue()  # stretches for the hearing worker
+        self._finish: queue.Queue = queue.Queue()  # heard lines for the finishing worker
+        self._open = None  # the latest look at the sentence still being spoken
+        self._finisher: threading.Thread | None = None
         self._pending = 0
         self._last_level = 0.0
         self._gate = None
@@ -79,6 +88,8 @@ class LiveSession:
             # VoiceGate learns the room's noise and lowers the segmenter's line to twice it.
             self._gate = VoiceGate(adaptive=True) if source == "mic" else None
         self._segmenter.on_segment = self._segment
+        if hasattr(self._segmenter, "on_partial"):
+            self._segmenter.on_partial = self._partial
         self._source: capture.Source | None = None
         self._worker: threading.Thread | None = None
         self.lines = 0
@@ -112,6 +123,9 @@ class LiveSession:
         if self._worker:
             self._worker.join(timeout=wait)
             self._worker = None
+        if self._finisher:
+            self._finisher.join(timeout=wait)
+            self._finisher = None
         if self.sid:
             self.store.end(self.sid)
             self._emit({"type": "stopped", "sid": self.sid, "lines": self.lines})
@@ -132,9 +146,13 @@ class LiveSession:
         self._segmenter.feed(pcm)
 
     def _segment(self, segment) -> None:
+        self._open = None  # the sentence is over: no more looks at it
         self._pending += 1
         self._emit({"type": "pending", "count": self._pending})
         self._queue.put(segment)
+
+    def _partial(self, stretch) -> None:
+        self._open = stretch  # only the newest look matters; the hearing worker takes it when idle
 
     def _watch(self) -> None:
         """Ends the session when its source dies (a device unplugged) or a file runs out."""
@@ -150,8 +168,18 @@ class LiveSession:
 
     def _work(self) -> None:
         while True:
-            segment = self._queue.get()
+            try:
+                segment = self._queue.get(timeout=0.1)
+            except queue.Empty:
+                look, self._open = self._open, None
+                if look is not None:
+                    try:
+                        self._peek(look)
+                    except Exception:  # a failed look costs nothing: the sentence still comes whole
+                        pass
+                continue
             if segment is None:
+                self._finish.put(None)
                 return
             try:
                 self._hear(segment)
@@ -161,12 +189,39 @@ class LiveSession:
                 self._pending = max(0, self._pending - 1)
                 self._emit({"type": "pending", "count": self._pending})
 
+    def _finishing(self) -> None:
+        while True:
+            item = self._finish.get()
+            if item is None:
+                return
+            try:
+                self._complete(*item)
+            except Exception as e:
+                self._emit({"type": "error", "message": f"{type(e).__name__}: {e}"})
+
+    def _prompt(self, lang: str | None) -> str:
+        """Whisper's context: the user's own terms, so names come out spelled as meant. Not the sentence
+        before: on FLEURS it raised Indonesian word errors from 9.8 to 10.7% (it copied the earlier line's
+        missing full stop and turned "berbahagia di Paris" into "berpajak di baris")."""
+        from .reason import word_list
+        terms = ", ".join(word_list(self.hints()[1]))
+        return terms + "." if terms else ""
+
+    def _peek(self, look) -> None:
+        """The words of a sentence still being spoken, shown grey until the sentence is done."""
+        lang = self.src if self.src != "auto" else self.hint
+        heard = self.recognizer.hear(look.samples, language=lang, candidates=None if lang else self.candidates,
+                                     prompt=self._prompt(lang), fallback=False)
+        if heard.text and self._queue.empty():  # not when the finished sentence is already waiting
+            self._emit({"type": "partial", "sid": self.sid, "id": f"h1-{look.index}", "t": look.start,
+                        "src": heard.text, "srcLang": heard.lang or lang})
+
     UNSURE = 0.5  # Whisper's language probability under which the meeting's language is trusted instead
 
     def _hear(self, segment) -> None:
         if self.src != "auto":
             # A named language skips Whisper's detection pass: half the time on a CPU.
-            heard = self.recognizer.hear(segment.samples, language=self.src)
+            heard = self.recognizer.hear(segment.samples, language=self.src, prompt=self._prompt(self.src))
         else:
             # Every stretch is asked which language it is: people switch mid-meeting, and locking onto
             # the first language heard turned Indonesian and English into Korean in testing.
@@ -178,20 +233,26 @@ class LiveSession:
             if heard.lang and heard.probability >= 0.8 and (self._votes >= 2 or self.hint is None):
                 self.hint = heard.lang
             if self.hint and (heard.lang is None or (heard.lang != self.hint and heard.probability < self.UNSURE)):
-                heard = self.recognizer.hear(segment.samples, language=self.hint)
+                heard = self.recognizer.hear(segment.samples, language=self.hint, prompt=self._prompt(self.hint))
         if not heard.text:
+            self._emit({"type": "partial-gone", "sid": self.sid, "id": f"h1-{segment.index}"})
             return
         src = heard.lang or self.hint or "en"
         tgt = self.tgt
         line = TranscriptLine(id=f"h1-{segment.index}", t=segment.start, speaker="them", src=heard.text, dst=None,
                               srcLang=src, dstLang=tgt, via="room" if self.kind == "mic" else None)
-        if src != tgt and self.reasoner is not None:
-            # Penalar takes a second or two: the heard words show at once, the translation fills the same line.
-            self._emit({"type": "line", "sid": self.sid, "id": line.id, "t": line.t, "src": line.src, "dst": None,
-                        "srcLang": src, "dstLang": tgt, "translating": True})
+        # The heard words show now; the finishing worker fills in the translation or the fixes.
+        self._emit({"type": "line", "sid": self.sid, "id": line.id, "t": line.t, "src": line.src, "dst": None,
+                    "srcLang": src, "dstLang": tgt, "translating": src != tgt})
+        self._finish.put((line, heard.confidence < UNSURE_WORDS))
+
+    def _complete(self, line, unsure: bool) -> None:
+        src, tgt = line.srcLang, line.dstLang
+        # Sentences waiting behind this one: Penalar would only make the lag grow, NLLB keeps up.
+        behind = self._finish.qsize() >= 1 and self.translator is not None
         t0 = time.monotonic()
-        note = interpret(line, self.reasoner, self.translator, self._recent, self.hints(),
-                         unsure=heard.confidence < UNSURE_WORDS)
+        note = interpret(line, None if behind else self.reasoner, self.translator, self._recent, self.hints(),
+                         unsure=unsure)
         self.lines += 1
         self.store.append(self.sid, line)
         self._emit({"type": "line", "sid": self.sid, "id": line.id, "t": line.t, "src": line.shown, "dst": line.dst,
