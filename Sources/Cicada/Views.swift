@@ -1530,7 +1530,11 @@ struct MainWindowView: View {
                 }
             }
             .onChange(of: currentMatch) { _, id in
-                if let id { withAnimation { proxy.scrollTo(id, anchor: .center) } }
+                guard let id else { return }
+                // Going to a line found while the recording plays stops following it, as a scroll by
+                // hand does: otherwise the next line heard pulls the page back within seconds.
+                if player.sessionID == s.id { player.userScrolled() }
+                withAnimation { proxy.scrollTo(id, anchor: .center) }
             }
             .onAppear {
                 if let t = jumpTo, let l = s.lines.first(where: { $0.t >= t - 1 }) { proxy.scrollTo(l.id, anchor: .top) }
