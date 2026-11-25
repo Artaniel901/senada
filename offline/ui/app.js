@@ -47,7 +47,7 @@ class LangBar {
     tabs.setAttribute('selected', String(Math.max(0, ids.indexOf(this.value))));
     tabs.addEventListener('change', (e) => this.set(e.detail.value, false));
     const more = el('select', { title: 'Bahasa lain' });
-    more.append(el('option', { value: '', textContent: 'Bahasa lain…' }));
+    more.append(el('option', { value: '', textContent: 'Lainnya' }));
     for (const l of byName()) {
       if (this.speechOnly && !l.speech) continue;
       if (l.favorite) continue;
@@ -128,7 +128,7 @@ async function translateNow(pressed = false) {
   if (!pressed && key === lastAsked) return;
   lastAsked = key;
   $('dstText').classList.add('busy');
-  $('timing').textContent = deep ? 'Penalar sedang menimbang maksudnya…' : penalarOn() ? 'Menerjemahkan…' : '';
+  $('timing').textContent = '';
   const r = await api.translate(text, srcBar.value, tgtBar.value, true, deep);
   if (key !== lastAsked) return; // a newer request is on its way
   $('dstText').classList.remove('busy');
@@ -137,9 +137,7 @@ async function translateNow(pressed = false) {
   showNote(r.note);
   state.detected = r.src;
   $('detected').textContent = srcBar.value === 'auto' ? (r.guessed ? `Terdeteksi: ${langName(r.guessed)}` : `Bahasa tidak dikenali, dianggap ${langName(r.src)}`) : '';
-  const took = r.ms < 100 ? 'kurang dari 0,1 detik' : `${(r.ms / 1000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} detik`;
-  const by = r.engine === 'penalar' ? (r.deep ? 'Penalar, dipikir dulu' : 'Penalar') : 'NLLB';
-  $('timing').textContent = r.src === tgtBar.value ? 'Bahasa asal dan tujuan sama' : `${took} · ${by} · ${['cuda', 'gpu'].includes(r.device) ? 'GPU' : 'CPU'}`;
+  $('timing').textContent = r.src === tgtBar.value ? 'Bahasa asal dan tujuan sama' : '';
   if (pressed) $('go').done();
   refreshHistory();
 }
@@ -226,9 +224,12 @@ function setupLive() {
     const r = await api.start_live(radio.value, src.value, liveTgtBar.value, null);
     if (r.error) { $('liveState').textContent = r.error; }
   });
+  // The size only matters while the subtitle is up, so it is shown only then.
+  const sizeRow = () => { $('sizeRow').hidden = !$('overlayToggle').checked; };
   $('overlayToggle').checked = !!state.settings.overlay;
-  $('overlayToggle').addEventListener('change', () => api.overlay($('overlayToggle').checked));
-  on('overlay-state', (e) => { if ($('overlayToggle').checked !== e.on) $('overlayToggle').checked = e.on; });
+  sizeRow();
+  $('overlayToggle').addEventListener('change', () => { api.overlay($('overlayToggle').checked); sizeRow(); });
+  on('overlay-state', (e) => { if ($('overlayToggle').checked !== e.on) $('overlayToggle').checked = e.on; sizeRow(); });
   $('overlaySize').value = state.settings.overlaySize;
   $('overlaySize').addEventListener('change', () => save({ overlaySize: Number($('overlaySize').value) }));
   $('fileGo').addEventListener('click', async () => {
@@ -238,6 +239,12 @@ function setupLive() {
     if (r.cancelled) return;
     $('fileBox').hidden = false;
     $('fileName').textContent = r.name;
+    // Made only now: a progress bar draws on the page-wide effects layer every frame, and a hidden one draws at the top-left corner.
+    if (!$('fileProgress')) {
+      const bar = el('sakuga-progress', { id: 'fileProgress', label: 'Menerjemahkan berkas' });
+      bar.setAttribute('done-label', 'Selesai ✓');
+      $('fileBox').append(bar);
+    }
     $('fileProgress').reset();
   });
 
@@ -248,28 +255,39 @@ function setupLive() {
     $('liveBadge').hidden = false;
     $('liveBadge').textContent = e.source === 'file' ? 'Membaca berkas' : 'Mendengarkan';
     $('liveGo').textContent = e.source === 'file' ? 'Hentikan' : 'Berhenti';
-    $('liveState').textContent = e.source === 'mic' ? 'Mendengarkan mikrofon…' : e.source === 'file' ? `Menerjemahkan ${e.name || 'berkas'}…` : 'Mendengarkan suara komputer…';
+    $('liveState').textContent = '';
   });
   on('stopped', (e) => {
+    dropPartial();
     state.live = false;
     document.body.classList.remove('live-on');
     $('liveBadge').hidden = true;
     $('liveGo').textContent = 'Mulai mendengarkan';
     $('meter').style.width = '0';
-    $('liveState').textContent = e.lines ? `Selesai. ${e.lines} kalimat tersimpan di Rekaman.` : 'Selesai. Tidak ada ucapan yang terdengar, jadi tidak ada yang disimpan.';
+    $('liveState').textContent = e.lines ? `${e.lines} kalimat tersimpan di Rekaman` : 'Tidak ada ucapan yang terdengar';
     if (e.lines) $('liveGo').done();
   });
+  on('device', (e) => {
+    $('liveState').textContent = e.name;
+    if (e.switched) toast(`Pindah ke ${e.name}`);
+  });
   on('level', (e) => { $('meter').style.width = `${Math.min(100, Math.sqrt(e.rms) * 260)}%`; });
-  on('pending', (e) => {
-    if (state.live && e.count > 0) $('liveState').textContent = `Memproses ${e.count} potongan suara…`;
-  });
-  on('line', (e) => {
-    addLine($('liveLines'), e, true);
-    $('liveState').textContent = 'Mendengarkan…';
-  });
+  on('partial', showPartial);
+  on('partial-gone', dropPartial);
+  on('line', (e) => { dropPartial(); addLine($('liveLines'), e, true); });
   on('error', (e) => { $('liveState').textContent = `Berhenti: ${e.message}`; });
-  on('file-progress', (e) => $('fileProgress').set(e.value));
+  on('file-progress', (e) => $('fileProgress')?.set(e.value));
 }
+
+// The sentence still being spoken: one grey line at the bottom, replaced as more is heard.
+function showPartial(e) {
+  const list = $('liveLines');
+  let li = list.querySelector('li.partial');
+  if (!li) { li = el('li', { className: 'partial' }); list.append(li); }
+  li.replaceChildren(el('span', { className: 't', textContent: clock(e.t) }), el('div', { className: 'dst', textContent: e.src }));
+  li.scrollIntoView({ block: 'nearest' });
+}
+function dropPartial() { $('liveLines').querySelector('li.partial')?.remove(); }
 
 // A heard line, or the same line again once Penalar has translated it (same id: replaced in place).
 function addLine(list, line, fresh) {
@@ -299,6 +317,8 @@ async function loadRecords() {
 function renderRecords() {
   const q = ($('recordSearch').value || '').toLowerCase();
   const shown = records.filter((r) => !q || `${r.title} ${r.preview}`.toLowerCase().includes(q));
+  $('recordsGrid').hidden = !records.length;
+  $('recordsBlank').hidden = !!records.length;
   $('recordList').replaceChildren(...shown.map((r) => {
     const when = new Date(r.startedAt);
     const b = el('button', { className: 'record', type: 'button' },
@@ -315,7 +335,7 @@ async function openRecord(id) {
   renderRecords();
   const s = await api.session(id);
   const box = $('recordDetail');
-  if (s.error) { box.replaceChildren(el('p', { className: 'empty-note', textContent: s.error })); return; }
+  if (s.error) { box.replaceChildren(el('p', { className: 'error', textContent: s.error })); return; }
   const list = el('ol', { className: 'lines' });
   for (const l of s.lines) addLine(list, l, false);
   const fmt = el('select', { title: 'Format berkas' });
@@ -333,7 +353,8 @@ async function openRecord(id) {
     if (!confirm(`Hapus rekaman "${s.title}"? Transkripnya tidak bisa dikembalikan.`)) return;
     await api.delete_session(id);
     state.record = null;
-    box.replaceChildren(el('p', { className: 'empty-note', textContent: 'Rekaman dihapus.' }));
+    box.replaceChildren();
+    toast('Rekaman dihapus');
     loadRecords();
   });
   box.replaceChildren(el('div', { className: 'detail-head' }, el('h2', { textContent: s.title }), del), exp, list);
@@ -386,7 +407,7 @@ function modelCard(m, active, kind) {
   }
   const card = el('div', { className: `model${active && m.installed ? ' active' : ''}` },
     el('div', { className: 'model-head' }, el('b', { textContent: m.title }), el('span', { className: 'size', textContent: `${m.sizeMb} MB` })),
-    el('p', { textContent: `${m.blurb} · lisensi ${m.license}` }), actions);
+    actions);
   if (downloads[m.id]) card.append(downloads[m.id].room);
   return card;
 }
@@ -395,13 +416,12 @@ function renderGpu() {
   const box = $('gpuBox');
   const parts = [];
   if (!g.nvidia) {
-    parts.push(el('p', { className: 'hint', textContent: 'Kartu grafis NVIDIA tidak ditemukan. Semua berjalan di prosesor (CPU): teks tetap cepat, suara langsung sedikit tertinggal.' }));
+    parts.push(el('span', { className: 'state', textContent: 'Berjalan di CPU' }));
   } else if (!g.installed) {
-    parts.push(el('p', { className: 'hint', textContent: `Komputer ini punya GPU NVIDIA. Unduh pustaka cuBLAS (${g.sizeMb} MB) agar suara langsung diproses di bawah satu detik per kalimat.` }));
     if (downloads['gpu-cuda']) {
       parts.push(el('span', { className: 'state', textContent: 'Mengunduh…' }), downloads['gpu-cuda'].room);
     } else {
-      const b = el('sakuga-button', { textContent: 'Aktifkan GPU' });
+      const b = el('sakuga-button', { textContent: `Aktifkan GPU (${g.sizeMb} MB)` });
       b.addEventListener('click', () => startDownload('gpu-cuda'));
       parts.push(b);
     }
@@ -410,9 +430,6 @@ function renderGpu() {
     t.checked = state.settings.device !== 'cpu';
     t.addEventListener('change', async () => { await save({ device: t.checked ? 'auto' : 'cpu' }); });
     parts.push(el('label', { className: 'inline gpu-toggle' }, t, el('span', { textContent: 'Pakai GPU NVIDIA' })));
-    const place = (d) => (['cuda', 'gpu'].includes(d) ? 'GPU' : 'CPU');
-    const where = [state.engines.llm && `Penalar di ${place(state.engines.llm.device)}`, state.engines.mt && `penerjemah di ${place(state.engines.mt.device)}`, state.engines.asr && `pendengar di ${place(state.engines.asr.device)}`].filter(Boolean).join(', ');
-    parts.push(el('p', { className: 'hint', textContent: where ? `Sekarang: ${where}.` : 'Mesin sedang dimuat.' }));
   }
   box.replaceChildren(...parts);
 }
@@ -452,22 +469,17 @@ function setupModels() {
 function setupEngines() {
   const show = () => {
     const box = $('engine');
-    const { mt, asr, llm } = state.engines;
-    box.className = 'engine';
-    if (state.engineError) { box.classList.add('error'); $('engineText').textContent = state.engineError; return; }
-    if (state.missing) { box.classList.add('error'); $('engineText').textContent = 'Unduh model di tab Model untuk mulai.'; return; }
-    if (asr && (mt || llm)) {
-      box.classList.add('ready');
-      const gpu = [mt, asr, llm].some((x) => x && ['cuda', 'gpu'].includes(x.device));
-      $('engineText').textContent = `Siap, tanpa internet · ${llm ? 'Penalar · ' : state.llmLoading ? 'Penalar dimuat… · ' : ''}${gpu ? 'GPU' : 'CPU'}`;
-    } else $('engineText').textContent = 'Memuat mesin…';
+    // Only something the user must act on is shown here: a failed engine or a missing model.
+    box.className = 'engine error';
+    const problem = state.engineError || (state.missing ? 'Unduh model di tab Model untuk mulai.' : '');
+    $('engineText').textContent = problem;
+    box.hidden = !problem;
   };
   on('engine', (e) => {
     state.engineError = e.state === 'error' ? `${e.kind === 'llm' ? 'Penalar' : 'Mesin'} gagal dimuat: ${e.message}` : null;
     if (e.state === 'missing' && e.kind !== 'llm') state.missing = true;  // no Penalar model is fine: NLLB translates
     if (e.state === 'ready') { state.engines[e.kind] = { model: e.model, device: e.device }; state.missing = false; }
     if (['loading', 'off', 'missing', 'error'].includes(e.state)) state.engines[e.kind] = null;
-    if (e.kind === 'llm') state.llmLoading = e.state === 'loading';
     show();
     renderGpu();
     renderPenalar();
@@ -493,16 +505,19 @@ async function start() {
   renderModels();
   renderHistory(init.history.slice(0, 12));
   $('recordSearch').addEventListener('input', renderRecords);
-  $('nav').addEventListener('change', (e) => {
-    for (const p of document.querySelectorAll('.page')) p.hidden = p.id !== `page-${e.detail.value}`;
-    if (e.detail.value === 'records') loadRecords();
-    if (e.detail.value === 'models') api.models().then((r) => { state.models = r.models; state.gpu.installed = r.gpuInstalled; state.engines = { ...state.engines, ...r.engines }; renderModels(); });
-  });
-  if (!init.models.some((m) => m.installed)) { $('nav').selected = 3; showPage('models'); }
+  $('nav').addEventListener('change', (e) => showPage(e.detail.value));
+  if (!init.models.some((m) => m.installed)) showPage('models');
   $('srcText').focus();
   if (init.drive) new Function('api', '$', 'on', 'showPage', init.drive)(api, $, on, showPage);
 }
-function showPage(name) { for (const p of document.querySelectorAll('.page')) p.hidden = p.id !== `page-${name}`; }
+// One way to change page, for the tabs and for code: the tabs follow, and the page's data is fetched fresh.
+const PAGES = ['text', 'live', 'records', 'models'];
+function showPage(name) {
+  for (const p of document.querySelectorAll('.page')) p.hidden = p.id !== `page-${name}`;
+  if ($('nav').selected !== PAGES.indexOf(name)) $('nav').selected = PAGES.indexOf(name);
+  if (name === 'records') loadRecords();
+  if (name === 'models') api.models().then((r) => { state.models = r.models; state.gpu.installed = r.gpuInstalled; state.engines = { ...state.engines, ...r.engines }; renderModels(); });
+}
 
 if (window.pywebview?.api?.init) start();
 else window.addEventListener('pywebviewready', start, { once: true });

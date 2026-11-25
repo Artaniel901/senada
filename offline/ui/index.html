@@ -18,13 +18,9 @@
 </head>
 <body>
 <header class="top">
-  <div class="pegs" aria-hidden="true"><i></i><i class="wide"></i><i></i></div>
   <div class="brand">
     <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><!-- same drawing as ui/senada.svg --><rect class="cel-shadow" x="9" y="9" width="52" height="52" rx="14"/><rect class="cel" x="4" y="4" width="52" height="52" rx="14"/><path class="voice pink" d="M12 40C19 40 20 24 27 24S34 30 40 30"/><path class="voice" d="M12 20C19 20 20 36 27 36S34 30 40 30H48"/></svg>
-    <div>
-      <h1>Senada</h1>
-      <p class="sub">Terjemahan yang paham maksud. Semuanya berjalan di komputer ini.</p>
-    </div>
+    <h1>Senada</h1>
   </div>
   <sakuga-tabs id="nav" label="Halaman">
     <option value="text">Teks</option>
@@ -32,24 +28,20 @@
     <option value="records">Rekaman</option>
     <option value="models">Model</option>
   </sakuga-tabs>
-  <div class="engine" id="engine" role="status" aria-live="polite"><span class="dot"></span><span id="engineText">Menyiapkan mesin…</span></div>
+  <div class="engine" id="engine" role="status" aria-live="polite" hidden><span class="dot"></span><span id="engineText"></span></div>
 </header>
 
 <main>
   <!-- Text -->
   <section class="page" id="page-text" role="tabpanel" aria-label="Teks">
     <div class="pair">
-      <div class="side">
-        <div class="langbar" id="textSrcBar"></div>
-      </div>
+      <div class="langbar" id="textSrcBar"></div>
       <sakuga-button variant="secondary" id="swap" aria-label="Tukar bahasa" title="Tukar bahasa">⇄</sakuga-button>
-      <div class="side">
-        <div class="langbar" id="textTgtBar"></div>
-      </div>
+      <div class="langbar" id="textTgtBar"></div>
     </div>
     <div class="sheets">
       <div class="cel">
-        <textarea id="srcText" placeholder="Ketik atau tempel teks di sini" spellcheck="false" maxlength="20000"></textarea>
+        <textarea id="srcText" aria-label="Teks asal" placeholder="Ketik atau tempel teks di sini" spellcheck="false" maxlength="20000"></textarea>
         <div class="cel-foot">
           <span class="hint" id="detected"></span>
           <span class="count" id="count">0</span>
@@ -57,7 +49,7 @@
         </div>
       </div>
       <div class="cel out" aria-live="polite">
-        <div id="dstText" class="dst" data-empty="Terjemahan muncul di sini"></div>
+        <div id="dstText" class="dst"></div>
         <p class="note" id="dstNote" hidden></p>
         <div class="cel-foot">
           <span class="hint" id="timing"></span>
@@ -65,16 +57,17 @@
         </div>
       </div>
     </div>
-    <div class="field context penalar-only"><span id="textContextLabel">Konteks, kalau ada</span>
-      <sakuga-input id="textContext" label="Konteks" placeholder="Misalnya: chat dengan teman kantor, atau rapat teknik tentang kondensasi"></sakuga-input>
-    </div>
     <div class="actions">
-      <sakuga-button id="go">Terjemahkan</sakuga-button>
+      <sakuga-button id="go" title="Ctrl + Enter">Terjemahkan</sakuga-button>
       <label class="inline"><sakuga-toggle id="asType" label="Terjemahkan sambil mengetik"></sakuga-toggle><span>Terjemahkan sambil mengetik</span></label>
       <label class="inline penalar-only"><sakuga-toggle id="deep" label="Pikir lebih dalam"></sakuga-toggle><span>Pikir lebih dalam</span></label>
-      <span class="keys">Ctrl + Enter</span>
+      <div class="style-switch penalar-only" role="group" aria-label="Gaya bahasa">
+        <button type="button" data-style="casual">Sehari-hari</button><button type="button" data-style="formal">Formal</button>
+      </div>
+      <div class="context penalar-only">
+        <sakuga-input id="textContext" label="Konteks" placeholder="Konteks, misalnya: chat dengan teman kantor"></sakuga-input>
+      </div>
     </div>
-    <p class="hint deep-hint penalar-only">Pikir lebih dalam untuk kalimat yang aneh, ambigu atau setengah jadi: Penalar menimbang maksudnya dulu, sekitar 10–30 detik. Hanya saat menekan Terjemahkan.</p>
     <div class="history">
       <div class="history-head">
         <h2>Baru saja</h2>
@@ -87,47 +80,51 @@
   <!-- Live -->
   <section class="page" id="page-live" role="tabpanel" aria-label="Suara langsung" hidden>
     <div class="live-grid">
-      <div class="cel controls">
-        <h2>Dengarkan</h2>
-        <sakuga-radio id="liveSource" label="Sumber suara">
-          <option value="system">Suara komputer (rapat, video, siaran)</option>
-          <option value="mic">Mikrofon (orang di ruangan)</option>
-        </sakuga-radio>
-        <div class="row">
-          <label class="field"><span>Bahasa yang diucapkan</span><select id="liveSrc"></select></label>
+      <div class="panel controls">
+        <div class="field">
+          <span class="field-label">Sumber suara</span>
+          <sakuga-radio id="liveSource" label="Sumber suara">
+            <option value="system">Suara komputer</option>
+            <option value="mic">Mikrofon</option>
+          </sakuga-radio>
         </div>
-        <div class="row hear" id="hearRow">
+        <label class="field"><span class="field-label">Bahasa yang diucapkan</span><select id="liveSrc"></select></label>
+        <div class="field hear" id="hearRow">
           <span class="field-label">Bahasa yang mungkin terdengar</span>
           <div class="hear-langs" id="hearLangs"></div>
           <select id="hearMore" title="Tambah bahasa yang mungkin terdengar"></select>
-          <p class="hint">Deteksi hanya memilih dari yang dicentang. Makin sedikit, makin tepat.</p>
         </div>
-        <div class="row">
+        <div class="field">
           <span class="field-label">Terjemahkan ke</span>
           <div class="langbar" id="liveTgtBar"></div>
         </div>
-        <div class="field context penalar-only"><span>Topik pembicaraan, kalau ada</span>
-          <sakuga-input id="liveTopic" label="Topik pembicaraan" placeholder="Misalnya: rapat riset kondensasi"></sakuga-input>
+        <div class="field penalar-only">
+          <span class="field-label">Gaya bahasa</span>
+          <div class="style-switch" role="group" aria-label="Gaya bahasa">
+            <button type="button" data-style="casual">Sehari-hari</button><button type="button" data-style="formal">Formal</button>
+          </div>
+        </div>
+        <div class="field context penalar-only">
+          <sakuga-input id="liveTopic" label="Topik pembicaraan" placeholder="Topik, misalnya: rapat riset kondensasi"></sakuga-input>
         </div>
         <div class="start">
-          <sakuga-button id="liveGo">Mulai mendengarkan</sakuga-button>
+          <sakuga-button id="liveGo" class="wide">Mulai mendengarkan</sakuga-button>
           <div class="meter" aria-hidden="true"><i id="meter"></i></div>
+          <p class="hint" id="liveState"></p>
         </div>
-        <p class="hint" id="liveState">Pilih sumber suara, lalu tekan Mulai.</p>
-        <hr>
-        <label class="inline"><sakuga-toggle id="overlayToggle" label="Subtitle melayang"></sakuga-toggle><span>Subtitle melayang di atas jendela lain</span></label>
-        <div class="row slider-row">
-          <span class="field-label">Ukuran subtitle</span>
-          <sakuga-slider id="overlaySize" min="18" max="48" step="2" value="28" unit=" px" label="Ukuran subtitle"></sakuga-slider>
+        <div class="group">
+          <label class="inline"><sakuga-toggle id="overlayToggle" label="Subtitle melayang"></sakuga-toggle><span>Subtitle melayang</span></label>
+          <div class="slider-row" id="sizeRow">
+            <span class="field-label">Ukuran</span>
+            <sakuga-slider id="overlaySize" min="18" max="48" step="2" value="28" unit=" px" label="Ukuran subtitle"></sakuga-slider>
+          </div>
         </div>
-        <hr>
-        <div class="file-row">
-          <sakuga-button variant="secondary" id="fileGo">Terjemahkan berkas rekaman</sakuga-button>
+        <div class="group file-row">
+          <sakuga-button variant="secondary" id="fileGo">Terjemahkan berkas</sakuga-button>
           <sakuga-tooltip text="Audio atau video: mp3, m4a, wav, mp4, mkv. Hasilnya tersimpan di Rekaman." label="Berkas apa saja">?</sakuga-tooltip>
         </div>
         <div id="fileBox" hidden>
           <p class="hint" id="fileName"></p>
-          <sakuga-progress id="fileProgress" label="Menerjemahkan berkas" done-label="Selesai ✓"></sakuga-progress>
         </div>
       </div>
       <div class="cel transcript">
@@ -135,58 +132,54 @@
           <h2>Transkrip</h2>
           <span class="live-badge" id="liveBadge" hidden>Mendengarkan</span>
         </div>
-        <ol id="liveLines" class="lines" data-empty="Kalimat yang terdengar dan terjemahannya akan muncul di sini, satu per satu."></ol>
+        <ol id="liveLines" class="lines"></ol>
       </div>
     </div>
   </section>
 
   <!-- Records -->
   <section class="page" id="page-records" role="tabpanel" aria-label="Rekaman" hidden>
-    <div class="records-grid">
-      <div class="cel list">
-        <sakuga-input id="recordSearch" type="search" label="Cari rekaman" placeholder="Cari kata di rekaman"></sakuga-input>
-        <ol id="recordList" data-empty="Belum ada rekaman. Dengarkan sesuatu di Suara langsung."></ol>
+    <div class="records-grid" id="recordsGrid">
+      <div class="panel list">
+        <sakuga-input id="recordSearch" type="search" label="Cari rekaman" placeholder="Cari di rekaman"></sakuga-input>
+        <ol id="recordList"></ol>
       </div>
-      <div class="cel detail" id="recordDetail">
-        <p class="empty-note">Pilih rekaman di kiri untuk membaca transkripnya.</p>
-      </div>
+      <div class="cel detail" id="recordDetail"></div>
     </div>
+    <div class="blank" id="recordsBlank" aria-hidden="true" hidden></div>
   </section>
 
   <!-- Models -->
   <section class="page" id="page-models" role="tabpanel" aria-label="Model" hidden>
-    <p class="lede">Model diunduh sekali dari Hugging Face, lalu semua berjalan tanpa internet. Semuanya tersimpan di folder aplikasi.</p>
     <div class="model-grid">
-      <div class="cel penalar">
-        <h2>Penalar</h2>
-        <p class="hint">Menerjemahkan maksud, bukan kata per kata: idiom, bahasa gaul, kalimat yang belum selesai, dan kata yang salah dengar, dengan melihat kalimat-kalimat sebelumnya.</p>
-        <label class="inline penalar-toggle"><sakuga-toggle id="reasoning" label="Pakai Penalar"></sakuga-toggle><span>Pakai Penalar</span></label>
+      <div class="panel penalar">
+        <div class="panel-head">
+          <h2>Penalar</h2>
+          <label class="inline"><sakuga-toggle id="reasoning" label="Pakai Penalar"></sakuga-toggle><span>Pakai Penalar</span></label>
+        </div>
         <div id="llmModels" class="models"></div>
-        <label class="field words"><span>Istilah dan nama</span>
-          <textarea id="words" rows="4" spellcheck="false" maxlength="4000" placeholder="Satu per baris, misalnya:&#10;fluks massa&#10;Kookmin University"></textarea>
-        </label>
-        <p class="hint">Ditulis persis seperti ini di setiap terjemahan, dan dipakai untuk membetulkan kata yang salah dengar.</p>
-        <label class="field words"><span>Bahasa gaul</span>
-          <textarea id="slang" rows="4" spellcheck="false" maxlength="8000" placeholder="Satu per baris, kata = artinya, misalnya:&#10;gabut = bosan, tidak ada kerjaan&#10;킹받네 = bikin kesal banget"></textarea>
-        </label>
-        <p class="hint">Senada sudah kenal sekitar 400 kata gaul Indonesia, Korea dan Inggris. Tambahkan yang belum dikenalnya di sini.</p>
+        <div class="words-pair">
+          <label class="field words"><span class="field-label">Istilah dan nama</span>
+            <textarea id="words" rows="4" spellcheck="false" maxlength="4000" placeholder="Satu per baris, misalnya:&#10;fluks massa&#10;Kookmin University"></textarea>
+          </label>
+          <label class="field words"><span class="field-label">Bahasa gaul</span>
+            <textarea id="slang" rows="4" spellcheck="false" maxlength="8000" placeholder="Satu per baris, kata = artinya, misalnya:&#10;gabut = bosan, tidak ada kerjaan&#10;킹받네 = bikin kesal banget"></textarea>
+          </label>
+        </div>
       </div>
-      <div class="cel">
+      <div class="panel">
         <h2>Penerjemah</h2>
-        <p class="hint">Mengubah teks dari satu bahasa ke bahasa lain. 202 bahasa. Dengan Penalar menyala, ini cadangan, dan yang menerjemahkan bahasa daerah serta bahasa lain yang kurang dikuasai Penalar.</p>
         <div id="mtModels" class="models"></div>
       </div>
-      <div class="cel">
+      <div class="panel">
         <h2>Pendengar</h2>
-        <p class="hint">Mengubah suara menjadi teks. 98 bahasa; sisanya bisa diketik.</p>
         <div id="asrModels" class="models"></div>
       </div>
-      <div class="cel">
+      <div class="panel">
         <h2>Kecepatan</h2>
         <div id="gpuBox"></div>
-        <hr>
         <sakuga-checkbox id="keepHistory">Simpan riwayat terjemahan teks</sakuga-checkbox>
-        <p class="hint folder">Folder data: <button class="plain" id="openData" type="button"></button></p>
+        <div class="field folder"><span class="field-label">Folder data</span><button class="plain" id="openData" type="button"></button></div>
       </div>
     </div>
     <p class="credits">Dibangun di atas <b>Cicada</b> oleh wquguru (Apache-2.0) dan tombol <b>Sakuga VFX</b> oleh Justin Finkelman (MIT). Model terjemahan NLLB-200 dari Meta berlisensi CC-BY-NC 4.0, hanya untuk pemakaian non-komersial. Whisper dari OpenAI berlisensi MIT. Penalar memakai Gemma 4 dari Google (Apache-2.0) lewat llama.cpp (MIT).</p>
