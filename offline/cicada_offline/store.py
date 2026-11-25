@@ -12,6 +12,12 @@ from . import catalog, paths
 DEFAULTS = {
     "mtModel": catalog.DEFAULT["mt"],
     "asrModel": catalog.DEFAULT["asr"],
+    "llmModel": catalog.DEFAULT["llm"],
+    "reasoning": True,  # Penalar translates when its model is downloaded; NLLB when this is off
+    "thinkDeep": False,  # text tab: let Penalar think before answering (slower, for hard sentences)
+    "textContext": "",  # text tab: what the text is about
+    "liveTopic": "",  # live: what the meeting is about
+    "words": "",  # names and terms, one per line: spelled this way in every translation
     "device": "auto",  # auto | cpu
     "textSrc": "auto",
     "textTgt": "ko",

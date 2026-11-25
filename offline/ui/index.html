@@ -58,17 +58,23 @@
       </div>
       <div class="cel out" aria-live="polite">
         <div id="dstText" class="dst" data-empty="Terjemahan muncul di sini"></div>
+        <p class="note" id="dstNote" hidden></p>
         <div class="cel-foot">
           <span class="hint" id="timing"></span>
           <button class="plain" id="copyDst" type="button">Salin</button>
         </div>
       </div>
     </div>
+    <div class="field context penalar-only"><span id="textContextLabel">Konteks, kalau ada</span>
+      <sakuga-input id="textContext" label="Konteks" placeholder="Misalnya: chat dengan teman kantor, atau rapat teknik tentang kondensasi"></sakuga-input>
+    </div>
     <div class="actions">
       <sakuga-button id="go">Terjemahkan</sakuga-button>
       <label class="inline"><sakuga-toggle id="asType" label="Terjemahkan sambil mengetik"></sakuga-toggle><span>Terjemahkan sambil mengetik</span></label>
+      <label class="inline penalar-only"><sakuga-toggle id="deep" label="Pikir lebih dalam"></sakuga-toggle><span>Pikir lebih dalam</span></label>
       <span class="keys">Ctrl + Enter</span>
     </div>
+    <p class="hint deep-hint penalar-only">Pikir lebih dalam untuk kalimat yang aneh, ambigu atau setengah jadi: Penalar menimbang maksudnya dulu, sekitar 10–30 detik. Hanya saat menekan Terjemahkan.</p>
     <div class="history">
       <div class="history-head">
         <h2>Baru saja</h2>
@@ -93,6 +99,9 @@
         <div class="row">
           <span class="field-label">Terjemahkan ke</span>
           <div class="langbar" id="liveTgtBar"></div>
+        </div>
+        <div class="field context penalar-only"><span>Topik pembicaraan, kalau ada</span>
+          <sakuga-input id="liveTopic" label="Topik pembicaraan" placeholder="Misalnya: rapat riset kondensasi"></sakuga-input>
         </div>
         <div class="start">
           <sakuga-button id="liveGo">Mulai mendengarkan</sakuga-button>
@@ -142,9 +151,19 @@
   <section class="page" id="page-models" role="tabpanel" aria-label="Model" hidden>
     <p class="lede">Model diunduh sekali dari Hugging Face, lalu semua berjalan tanpa internet. Semuanya tersimpan di folder aplikasi.</p>
     <div class="model-grid">
+      <div class="cel penalar">
+        <h2>Penalar</h2>
+        <p class="hint">Menerjemahkan maksud, bukan kata per kata: idiom, bahasa gaul, kalimat yang belum selesai, dan kata yang salah dengar, dengan melihat kalimat-kalimat sebelumnya.</p>
+        <label class="inline penalar-toggle"><sakuga-toggle id="reasoning" label="Pakai Penalar"></sakuga-toggle><span>Pakai Penalar</span></label>
+        <div id="llmModels" class="models"></div>
+        <label class="field words"><span>Istilah dan nama</span>
+          <textarea id="words" rows="4" spellcheck="false" maxlength="4000" placeholder="Satu per baris, misalnya:&#10;fluks massa&#10;Kookmin University"></textarea>
+        </label>
+        <p class="hint">Ditulis persis seperti ini di setiap terjemahan, dan dipakai untuk membetulkan kata yang salah dengar.</p>
+      </div>
       <div class="cel">
         <h2>Penerjemah</h2>
-        <p class="hint">Mengubah teks dari satu bahasa ke bahasa lain. 200 bahasa.</p>
+        <p class="hint">Mengubah teks dari satu bahasa ke bahasa lain. 200 bahasa. Dengan Penalar menyala, ini cadangan dan untuk bahasa daerah.</p>
         <div id="mtModels" class="models"></div>
       </div>
       <div class="cel">
@@ -160,7 +179,7 @@
         <p class="hint folder">Folder data: <button class="plain" id="openData" type="button"></button></p>
       </div>
     </div>
-    <p class="credits">Dibangun di atas <b>Cicada</b> oleh wquguru (Apache-2.0) dan tombol <b>Sakuga VFX</b> oleh Justin Finkelman (MIT). Model terjemahan NLLB-200 dari Meta berlisensi CC-BY-NC 4.0, hanya untuk pemakaian non-komersial. Whisper dari OpenAI berlisensi MIT.</p>
+    <p class="credits">Dibangun di atas <b>Cicada</b> oleh wquguru (Apache-2.0) dan tombol <b>Sakuga VFX</b> oleh Justin Finkelman (MIT). Model terjemahan NLLB-200 dari Meta berlisensi CC-BY-NC 4.0, hanya untuk pemakaian non-komersial. Whisper dari OpenAI berlisensi MIT. Penalar memakai Gemma 4 dari Google (Apache-2.0) lewat llama.cpp (MIT).</p>
   </section>
 </main>
 

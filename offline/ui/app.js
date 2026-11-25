@@ -84,7 +84,10 @@ function setupText() {
   $('asType').addEventListener('change', () => save({ translateAsYouType: $('asType').checked }));
   $('go').addEventListener('click', () => translateNow(true));
   $('swap').addEventListener('click', swap);
-  $('clearSrc').addEventListener('click', () => { src.value = ''; $('dstText').textContent = ''; $('detected').textContent = ''; $('count').textContent = '0'; src.focus(); });
+  $('deep').checked = !!state.settings.thinkDeep;
+  $('deep').addEventListener('change', () => save({ thinkDeep: $('deep').checked }));
+  keepTyped($('textContext'), 'textContext', () => { lastAsked = ''; });
+  $('clearSrc').addEventListener('click', () => { src.value = ''; $('dstText').textContent = ''; showNote(''); $('detected').textContent = ''; $('count').textContent = '0'; src.focus(); });
   $('copyDst').addEventListener('click', async () => {
     const text = $('dstText').textContent;
     if (!text) return;
@@ -99,22 +102,42 @@ function setupText() {
   });
 }
 
+// A text field whose value is a setting: saved a moment after typing stops.
+function keepTyped(field, key, after) {
+  field.value = state.settings[key] || '';
+  let timer = null;
+  const store = () => { clearTimeout(timer); if (field.value !== state.settings[key]) save({ [key]: field.value }).then(() => after?.()); };
+  field.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(store, 700); });
+  field.addEventListener('change', store);
+}
+
+function showNote(text) {
+  $('dstNote').hidden = !text;
+  $('dstNote').textContent = text ? `Catatan: ${text}` : '';
+}
+
+const penalarOn = () => !!state.engines.llm;
+
 async function translateNow(pressed = false) {
   const text = $('srcText').value;
-  const key = `${srcBar.value}|${tgtBar.value}|${text}`;
-  if (!text.trim()) { $('dstText').textContent = ''; $('detected').textContent = ''; return; }
+  const deep = pressed && $('deep').checked && penalarOn();
+  const key = `${srcBar.value}|${tgtBar.value}|${deep}|${text}`;
+  if (!text.trim()) { $('dstText').textContent = ''; showNote(''); $('detected').textContent = ''; return; }
   if (!pressed && key === lastAsked) return;
   lastAsked = key;
   $('dstText').classList.add('busy');
-  const r = await api.translate(text, srcBar.value, tgtBar.value, true);
+  $('timing').textContent = deep ? 'Penalar sedang menimbang maksudnya…' : penalarOn() ? 'Menerjemahkan…' : '';
+  const r = await api.translate(text, srcBar.value, tgtBar.value, true, deep);
   if (key !== lastAsked) return; // a newer request is on its way
   $('dstText').classList.remove('busy');
-  if (r.error) { $('dstText').textContent = ''; $('timing').textContent = r.error; return; }
+  if (r.error) { $('dstText').textContent = ''; showNote(''); $('timing').textContent = r.error; return; }
   $('dstText').textContent = r.text;
+  showNote(r.note);
   state.detected = r.src;
   $('detected').textContent = srcBar.value === 'auto' ? (r.guessed ? `Terdeteksi: ${langName(r.guessed)}` : `Bahasa tidak dikenali, dianggap ${langName(r.src)}`) : '';
   const took = r.ms < 100 ? 'kurang dari 0,1 detik' : `${(r.ms / 1000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} detik`;
-  $('timing').textContent = r.src === tgtBar.value ? 'Bahasa asal dan tujuan sama' : `${took} · ${r.device === 'cuda' ? 'GPU' : 'CPU'}`;
+  const by = r.engine === 'penalar' ? (r.deep ? 'Penalar, dipikir dulu' : 'Penalar') : 'NLLB';
+  $('timing').textContent = r.src === tgtBar.value ? 'Bahasa asal dan tujuan sama' : `${took} · ${by} · ${['cuda', 'gpu'].includes(r.device) ? 'GPU' : 'CPU'}`;
   if (pressed) $('go').done();
   refreshHistory();
 }
@@ -166,6 +189,7 @@ function setupLive() {
   src.value = state.settings.liveSrc;
   src.addEventListener('change', () => save({ liveSrc: src.value }));
   liveTgtBar = new LangBar($('liveTgtBar'), { value: state.settings.liveTgt, onChange: (v) => { save({ liveTgt: v }); api.set_live_target(v); } });
+  keepTyped($('liveTopic'), 'liveTopic');
 
   $('liveGo').addEventListener('click', async () => {
     if (state.live) { await api.stop_live(); return; }
@@ -217,12 +241,21 @@ function setupLive() {
   on('file-progress', (e) => $('fileProgress').set(e.value));
 }
 
+// A heard line, or the same line again once Penalar has translated it (same id: replaced in place).
 function addLine(list, line, fresh) {
-  list.querySelector('.fresh')?.classList.remove('fresh');
-  const li = el('li', { className: fresh ? 'fresh' : '' },
+  const pending = !!line.translating;
+  const kids = [
     el('span', { className: 't', textContent: clock(line.t) }),
     el('div', { className: 'src' }, el('span', { className: 'lang', textContent: langName(line.srcLang) }), line.src),
-    el('div', { className: 'dst', textContent: line.dst || line.src }));
+    el('div', { className: pending ? 'dst pending' : 'dst', textContent: pending ? 'Menerjemahkan…' : line.dst || line.src }),
+  ];
+  if (line.fixes?.length) kids.push(el('p', { className: 'fixed', textContent: `Dibetulkan dari yang terdengar: ${line.fixes.map(([a, b]) => `${a} → ${b}`).join(', ')}` }));
+  if (line.note) kids.push(el('p', { className: 'note', textContent: `Catatan: ${line.note}` }));
+  const old = line.id && list.querySelector(`li[data-id="${CSS.escape(line.id)}"]`);
+  if (old) { old.replaceChildren(...kids); return; }
+  list.querySelector('.fresh')?.classList.remove('fresh');
+  const li = el('li', { className: fresh ? 'fresh' : '' }, ...kids);
+  if (line.id) li.dataset.id = line.id;
   list.append(li);
   if (fresh) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
@@ -278,13 +311,19 @@ async function openRecord(id) {
 
 // ───────── Models ─────────
 const downloads = {};
+const MODEL_KEY = { mt: 'mtModel', asr: 'asrModel', llm: 'llmModel' };
+const HOST = { mt: 'mtModels', asr: 'asrModels', llm: 'llmModels' };
 function renderModels() {
-  for (const kind of ['mt', 'asr']) {
-    const host = $(kind === 'mt' ? 'mtModels' : 'asrModels');
-    const active = state.settings[kind === 'mt' ? 'mtModel' : 'asrModel'];
-    host.replaceChildren(...state.models.filter((m) => m.kind === kind).map((m) => modelCard(m, m.id === active, kind)));
+  for (const kind of ['llm', 'mt', 'asr']) {
+    const active = state.settings[MODEL_KEY[kind]];
+    $(HOST[kind]).replaceChildren(...state.models.filter((m) => m.kind === kind).map((m) => modelCard(m, m.id === active, kind)));
   }
   renderGpu();
+  renderPenalar();
+}
+// The Penalar-only controls (deep thinking, topic) show only while Penalar is loaded.
+function renderPenalar() {
+  document.body.classList.toggle('penalar-on', penalarOn());
 }
 function modelCard(m, active, kind) {
   const actions = el('div', { className: 'model-actions' });
@@ -294,7 +333,7 @@ function modelCard(m, active, kind) {
     cancel.addEventListener('click', () => api.cancel_download());
     actions.append(cancel);
   } else if (!m.installed) {
-    const b = el('sakuga-button', { textContent: `Unduh ${m.sizeMb >= 1000 ? (m.sizeMb / 1000).toFixed(1) + ' GB' : m.sizeMb + ' MB'}` });
+    const b = el('sakuga-button', { textContent: `Unduh ${m.sizeMb >= 1000 ? (m.sizeMb / 1000).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' GB' : m.sizeMb + ' MB'}` });
     b.addEventListener('click', () => startDownload(m.id));
     actions.append(b);
   } else if (active) {
@@ -303,7 +342,7 @@ function modelCard(m, active, kind) {
     const use = el('sakuga-button', { textContent: 'Pakai ini' });
     use.setAttribute('variant', 'secondary');
     use.addEventListener('click', async () => {
-      await save({ [kind === 'mt' ? 'mtModel' : 'asrModel']: m.id });
+      await save({ [MODEL_KEY[kind]]: m.id });
       use.done(); renderModels();
     });
     const rm = el('button', { className: 'plain danger', type: 'button', textContent: 'Hapus dari komputer' });
@@ -341,7 +380,8 @@ function renderGpu() {
     t.checked = state.settings.device !== 'cpu';
     t.addEventListener('change', async () => { await save({ device: t.checked ? 'auto' : 'cpu' }); });
     parts.push(el('label', { className: 'inline gpu-toggle' }, t, el('span', { textContent: 'Pakai GPU NVIDIA' })));
-    const where = [state.engines.mt && `penerjemah di ${state.engines.mt.device === 'cuda' ? 'GPU' : 'CPU'}`, state.engines.asr && `pendengar di ${state.engines.asr.device === 'cuda' ? 'GPU' : 'CPU'}`].filter(Boolean).join(', ');
+    const place = (d) => (['cuda', 'gpu'].includes(d) ? 'GPU' : 'CPU');
+    const where = [state.engines.llm && `Penalar di ${place(state.engines.llm.device)}`, state.engines.mt && `penerjemah di ${place(state.engines.mt.device)}`, state.engines.asr && `pendengar di ${place(state.engines.asr.device)}`].filter(Boolean).join(', ');
     parts.push(el('p', { className: 'hint', textContent: where ? `Sekarang: ${where}.` : 'Mesin sedang dimuat.' }));
   }
   box.replaceChildren(...parts);
@@ -368,6 +408,9 @@ function setupModels() {
     }, 1600);
   });
   on('download-failed', (e) => { delete downloads[e.id]; renderModels(); toast(e.message.slice(0, 40)); });
+  $('reasoning').checked = !!state.settings.reasoning;
+  $('reasoning').addEventListener('change', () => save({ reasoning: $('reasoning').checked }));
+  keepTyped($('words'), 'words');
   $('keepHistory').checked = !!state.settings.keepHistory;
   $('keepHistory').addEventListener('change', () => save({ keepHistory: $('keepHistory').checked }));
   $('openData').textContent = state.dataFolder;
@@ -378,23 +421,25 @@ function setupModels() {
 function setupEngines() {
   const show = () => {
     const box = $('engine');
-    const { mt, asr } = state.engines;
+    const { mt, asr, llm } = state.engines;
     box.className = 'engine';
     if (state.engineError) { box.classList.add('error'); $('engineText').textContent = state.engineError; return; }
     if (state.missing) { box.classList.add('error'); $('engineText').textContent = 'Unduh model di tab Model untuk mulai.'; return; }
-    if (mt && asr) {
+    if (asr && (mt || llm)) {
       box.classList.add('ready');
-      const gpu = mt.device === 'cuda' || asr.device === 'cuda';
-      $('engineText').textContent = `Siap, tanpa internet · ${gpu ? 'GPU' : 'CPU'}`;
+      const gpu = [mt, asr, llm].some((x) => x && ['cuda', 'gpu'].includes(x.device));
+      $('engineText').textContent = `Siap, tanpa internet · ${llm ? 'Penalar · ' : state.llmLoading ? 'Penalar dimuat… · ' : ''}${gpu ? 'GPU' : 'CPU'}`;
     } else $('engineText').textContent = 'Memuat mesin…';
   };
   on('engine', (e) => {
-    state.engineError = e.state === 'error' ? `Mesin gagal dimuat: ${e.message}` : null;
-    if (e.state === 'missing') state.missing = true;
+    state.engineError = e.state === 'error' ? `${e.kind === 'llm' ? 'Penalar' : 'Mesin'} gagal dimuat: ${e.message}` : null;
+    if (e.state === 'missing' && e.kind !== 'llm') state.missing = true;  // no Penalar model is fine: NLLB translates
     if (e.state === 'ready') { state.engines[e.kind] = { model: e.model, device: e.device }; state.missing = false; }
-    if (e.state === 'loading') state.engines[e.kind] = null;
+    if (['loading', 'off', 'missing', 'error'].includes(e.state)) state.engines[e.kind] = null;
+    if (e.kind === 'llm') state.llmLoading = e.state === 'loading';
     show();
     renderGpu();
+    renderPenalar();
   });
   show();
 }

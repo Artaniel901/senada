@@ -10,6 +10,13 @@ mengunduh model.
 
 ## Yang bisa dilakukan
 
+- **Penalar** (baru di 0.2.0): model bahasa lokal (Gemma 4 lewat llama.cpp) yang menerjemahkan
+  *maksud*, bukan kata per kata. Idiom, bahasa gaul dan kalimat yang belum selesai jadi kalimat yang
+  wajar dan benar tata bahasanya. Ia membaca kalimat-kalimat sebelumnya, topik dan daftar istilah Anda,
+  jadi kata yang salah dengar ("Coevisien", "fluk semasa") dibetulkan jadi "Koefisien" dan "fluks massa".
+  Kalau maknanya tidak sama dengan kata-katanya (idiom, sindiran, basa-basi), ada catatan pendek.
+  Untuk kalimat yang sangat aneh, nyalakan **Pikir lebih dalam** di tab Teks (sekitar 10–30 detik).
+
 - **Teks**: ketik atau tempel teks, lalu terjemahkan antar 73 bahasa. Indonesia, Korea dan Inggris
   ada di depan. Bahasa sumber dideteksi otomatis. Bisa menerjemahkan sambil mengetik, dan
   terjemahan terbaru disimpan di riwayat. Ada juga bahasa daerah: Jawa, Sunda, Minang, Bali,
@@ -32,6 +39,8 @@ mengunduh model.
    Whisper small (490 MB).
 5. Kalau ada kartu NVIDIA, tekan **Aktifkan GPU** (cuBLAS, unduhan 553 MB). Dengan GPU satu
    kalimat selesai di bawah 1 detik. Tanpa GPU sekitar 4–6 detik.
+6. Untuk terjemahan yang paham maksud, unduh **Penalar · Kualitas** (4,7 GB). Mesinnya (llama.cpp,
+   39 MB) ikut terunduh. Penalar memakai GPU lewat Vulkan, jadi kartu AMD dan Intel juga bisa.
 
 Model, pengaturan, riwayat dan rekaman tersimpan di folder ini: `models/` dan `data/`.
 
@@ -44,6 +53,15 @@ Model, pengaturan, riwayat dan rekaman tersimpan di folder ini: `models/` dan `d
 | Pendengar · Seimbang (bawaan) | Whisper small | 490 MB | MIT |
 | Pendengar · Ringan | Whisper base | 150 MB | MIT |
 | Pendengar · Akurat | Whisper large-v3 turbo | 1,6 GB | MIT |
+| Penalar · Kualitas (bawaan) | Gemma 4 E4B, GGUF Q4_K_M | 4,7 GB | Apache-2.0 |
+| Penalar · Ringan | Gemma 4 E2B, GGUF Q4_K_M | 3,0 GB | Apache-2.0 |
+
+Mesin Penalar adalah `llama-server` dari llama.cpp (MIT), build b12721 versi Vulkan, dicek dengan
+SHA-256. Ia hanya mendengarkan di 127.0.0.1 dengan kunci acak, dan ikut mati kalau aplikasi ditutup.
+
+Dengan Penalar menyala, NLLB pindah ke CPU dan hanya dipakai untuk bahasa daerah (Minang, Bali,
+Banjar, Bugis, Aceh) dan sebagai cadangan kalau Penalar gagal. Di GPU 6 GB, Whisper dan Gemma 4 E4B
+bersama memakai sekitar 5,4 GB.
 
 NLLB-200 dari Meta berlisensi **non-komersial** (CC-BY-NC-4.0). Aplikasi ini boleh dipakai sendiri,
 tapi tidak untuk dijual.
@@ -56,12 +74,14 @@ bagian-bagian ini dipakai apa adanya:
 - `segmenter.py`: memotong suara menjadi kalimat. Angkanya sama di semua platform Cicada.
 - `roommic.VoiceGate`: mempelajari tingkat bising ruangan untuk mikrofon.
 - `models.py` dan `session_store.py`: format rekaman. Rekaman Cicada Offline bisa dibaca Cicada.
+  Kata yang dibetulkan Penalar disimpan di kolom `fixes` milik Cicada; teks yang terdengar tetap utuh.
 - `audio.Wav`: membaca berkas WAV.
 
 Yang baru ada di `cicada_offline/`:
 
 - `asr.py`: Whisper lewat faster-whisper.
 - `translate.py`: NLLB lewat CTranslate2.
+- `reason.py`: Penalar, Gemma 4 lewat `llama-server`.
 - `capture.py`: suara komputer lewat WASAPI loopback, plus mikrofon.
 - `live.py`: alur langsung.
 - `app.py`: jendela pywebview.
@@ -78,6 +98,7 @@ Yang baru ada di `cicada_offline/`:
 - `CICADA_OFFLINE_HOME` memindahkan folder `data/`, misalnya untuk uji.
 - `CICADA_OFFLINE_MODELS` memindahkan folder `models/`.
 - `CICADA_OFFLINE_DEBUG=1` membuka DevTools.
+- `tools/try_live.py --penalar --topic "..." --words "..." id rekaman.wav` mencoba Penalar tanpa jendela.
 - `CICADA_OFFLINE_DRIVE=<berkas.js>` menjalankan skrip di halaman setelah dimulai. Ini hanya untuk
   uji antarmuka.
 
@@ -92,4 +113,7 @@ Komponen Sakuga ada di `ui/vendor/sakuga/` dan tidak diubah. Gayanya hanya diatu
 - Mikrofon laptop yang punya peredam gema bisa membuang suara dari speaker laptop sendiri. Ucapan
   orang di ruangan tetap tertangkap.
 - Ketepatan istilah teknis tergantung model pendengar. Whisper small kadang salah mendengar
-  ("koevisien"); untuk istilah teknis, pakai Pendengar · Akurat.
+  ("koevisien"). Penalar membetulkan sebagian besar, apalagi kalau istilahnya ada di daftar
+  **Istilah dan nama**; untuk rapat yang sangat teknis, pakai juga Pendengar · Akurat.
+- Penalar menambah 1–2,5 detik per kalimat di suara langsung: kalimat yang terdengar muncul dulu,
+  terjemahannya menyusul. Tanpa GPU, Penalar jauh lebih lambat; matikan saja di tab Model.

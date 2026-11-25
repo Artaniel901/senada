@@ -10,14 +10,49 @@ import queue
 import threading
 import time
 
-from . import capture
-from .core import Segmenter, SessionStore, TranscriptLine, VoiceGate, Wav
+from . import capture, reason
+from .core import LineFix, Segmenter, SessionStore, TranscriptLine, VoiceGate, Wav
+
+
+def interpret(line, reasoner, translator, recent: list, hints: tuple, log=lambda m: None, beam: int = 2) -> str:
+    """Fills in a heard line's translation: Penalar with the lines before it (fixing misheard words into
+    `line.fixes`, Cicada's own field, so `line.shown` and the records carry them), NLLB when Penalar is off,
+    doesn't know the pair or gives nothing usable. `recent` is the running context, updated here. Returns
+    Penalar's note on what was meant, or ""."""
+    src, tgt = line.srcLang, line.dstLang
+    note = ""
+    if src == tgt and reasoner is not None and reasoner.alive and reason.handles(src, tgt):
+        # Nothing to translate, but misheard words still get fixed so the transcript reads right.
+        try:
+            topic, words = hints
+            line.fixes = [LineFix(from_=a, to=b) for a, b in reasoner.fix_line(line.src, src, recent, topic, words)] or None
+        except Exception as e:
+            log(f"penalar fix failed: {type(e).__name__}: {e}")
+    if src != tgt:
+        if reasoner is not None and reasoner.alive and reason.handles(src, tgt):
+            try:
+                topic, words = hints
+                got = reasoner.translate_line(line.src, src, tgt, recent, topic, words)
+                if got:
+                    line.dst = got.translation
+                    line.fixes = [LineFix(from_=a, to=b) for a, b in got.fixes] or None
+                    note = got.note
+            except Exception as e:
+                log(f"penalar line failed: {type(e).__name__}: {e}")
+        if line.dst is None and translator is not None:
+            line.dst = translator.translate(line.shown, src, tgt, beam=beam)
+    recent.append((line.shown, line.dst))
+    del recent[:-8]
+    return note
 
 
 class LiveSession:
     def __init__(self, recognizer, translator, store: SessionStore, source: str, src: str, tgt: str,
-                 on_event, wav_path: str | None = None, wav_speed: float = 1.0):
+                 on_event, wav_path: str | None = None, wav_speed: float = 1.0, reasoner=None,
+                 hints=lambda: ("", "")):
         self.recognizer, self.translator, self.store = recognizer, translator, store
+        self.reasoner, self.hints = reasoner, hints
+        self._recent: list = []
         self.kind, self.src, self.tgt = source, src, tgt
         self.on_event = on_event
         self.wav_path, self.wav_speed = wav_path, wav_speed
@@ -137,14 +172,19 @@ class LiveSession:
             return
         src = heard.lang or self.hint or "en"
         tgt = self.tgt
-        t0 = time.monotonic()
-        dst = self.translator.translate(heard.text, src, tgt, beam=2) if src != tgt else None
-        self.lines += 1
-        line = TranscriptLine(id=f"h1-{segment.index}", t=segment.start, speaker="them", src=heard.text, dst=dst,
+        line = TranscriptLine(id=f"h1-{segment.index}", t=segment.start, speaker="them", src=heard.text, dst=None,
                               srcLang=src, dstLang=tgt, via="room" if self.kind == "mic" else None)
+        if src != tgt and self.reasoner is not None:
+            # Penalar takes a second or two: the heard words show at once, the translation fills the same line.
+            self._emit({"type": "line", "sid": self.sid, "id": line.id, "t": line.t, "src": line.src, "dst": None,
+                        "srcLang": src, "dstLang": tgt, "translating": True})
+        t0 = time.monotonic()
+        note = interpret(line, self.reasoner, self.translator, self._recent, self.hints())
+        self.lines += 1
         self.store.append(self.sid, line)
-        self._emit({"type": "line", "sid": self.sid, "id": line.id, "t": line.t, "src": line.src, "dst": dst,
-                    "srcLang": src, "dstLang": tgt, "translateMs": round((time.monotonic() - t0) * 1000)})
+        self._emit({"type": "line", "sid": self.sid, "id": line.id, "t": line.t, "src": line.shown, "dst": line.dst,
+                    "srcLang": src, "dstLang": tgt, "note": note, "fixes": [[f.from_, f.to] for f in line.fixes or []],
+                    "translateMs": round((time.monotonic() - t0) * 1000)})
 
     def _emit(self, event: dict) -> None:
         try:

@@ -14,6 +14,8 @@ Downloaded at run time, not part of this repository:
   and JustFrederik on Hugging Face.
 - Whisper (OpenAI), MIT. CTranslate2 conversions by Systran and deepdml on Hugging Face.
 - cuBLAS (NVIDIA), from the `nvidia-cublas-cu12` wheel on PyPI, under the NVIDIA software license.
+- Gemma 4 E4B / E2B (Google), Apache-2.0, as 4-bit GGUF files by unsloth on Hugging Face.
+- llama.cpp `llama-server` (ggml-org), MIT, the Windows Vulkan build b12721 from its GitHub release.
 
 Python packages (see `requirements.txt`) keep their own licenses: faster-whisper (MIT),
 CTranslate2 (MIT), SentencePiece (Apache-2.0), PyAV (BSD), SoundCard (BSD), pywebview (BSD),

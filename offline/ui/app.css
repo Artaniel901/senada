@@ -216,7 +216,7 @@ textarea:focus { outline: none; }
 
 /* Models */
 .lede { max-width: 70ch; margin: 0 0 22px; color: var(--ink-2); }
-.model-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; align-items: start; }
+.model-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 26px; align-items: start; }
 .models { display: grid; gap: 14px; margin-top: 14px; }
 .model { border: 2.4px solid var(--paper-line); border-radius: 12px; padding: 12px 14px; }
 .model.active { border-color: var(--ink); background: var(--lav); }
@@ -232,13 +232,30 @@ textarea:focus { outline: none; }
 .credits { margin-top: 34px; font-size: 12px; color: var(--dim); max-width: 90ch; }
 #keepHistory { display: block; margin: 4px 0 14px; }
 
+/* Penalar: what was meant, what was misheard */
+body:not(.penalar-on) .penalar-only { display: none; }
+.context { margin: 22px 0 0; max-width: 720px; }
+.context sakuga-input { display: block; }
+.deep-hint { margin: 2px 0 0; max-width: 72ch; }
+.cel.out .note { margin: 0 24px 12px; padding: 10px 14px; border-radius: 10px; background: var(--lav); color: var(--ink-2); font-size: 15px; line-height: 1.55; }
+.lines .note, .lines .fixed { grid-column: 2; margin: 2px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.lines .note { background: var(--lav); border-radius: 8px; padding: 6px 10px; }
+.lines .fixed { color: var(--dim); }
+.lines .dst.pending { color: var(--dim); font-size: 16px; }
+.penalar { grid-column: 1 / -1; }
+.penalar .models { grid-template-columns: repeat(2, 1fr); }
+.penalar-toggle { margin-top: 48px; }  /* the zoomed toggle reaches up over the line above, as .gpu-toggle */
+.words { margin-top: 18px; max-width: 520px; }
+.words textarea { min-height: 0; flex: none; font-size: 15px; padding: 10px 12px; border: 2.4px solid var(--paper-line); border-radius: 12px; background: var(--card); resize: vertical; }
+.words textarea:focus-visible { border-color: var(--ink); }
+
 #toast { position: fixed; left: 28px; bottom: 26px; z-index: 50; }
 
 @media (max-width: 1060px) {
   .top { grid-template-columns: 1fr auto; }
   #nav { grid-column: 1 / -1; justify-self: start; }
   .engine { grid-row: 1; grid-column: 2; }
-  .live-grid, .records-grid, .model-grid { grid-template-columns: 1fr; }
+  .live-grid, .records-grid, .model-grid, .penalar .models { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
   .sheets, .pair { grid-template-columns: 1fr; }

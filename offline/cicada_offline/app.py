@@ -9,7 +9,7 @@ import threading
 import time
 import traceback
 
-from . import __version__, catalog, detect, export, languages, paths
+from . import __version__, catalog, detect, export, languages, paths, reason
 from .store import History, Settings
 
 catalog.use_gpu_libraries()
@@ -37,29 +37,49 @@ def _drive_script() -> str | None:
 
 
 class Engines:
-    """Whisper and NLLB, loaded once and swapped when Settings picks another model."""
+    """Whisper, NLLB and Penalar, loaded once and swapped when Settings picks another model. With Penalar on,
+    NLLB only covers the regional languages and failures, so it moves to the CPU and leaves the GPU's
+    memory to Whisper and Gemma (all three on a 6 GB card did not fit)."""
 
     def __init__(self, settings: Settings, emit):
         self._settings, self.emit = settings, emit
         self.translator = None
         self.recognizer = None
+        self.reasoner = None
         self._gate = threading.Lock()
 
     def state(self) -> dict:
         return {
             "mt": {"model": self.translator.model_id, "device": self.translator.device} if self.translator else None,
             "asr": {"model": self.recognizer.model_id, "device": self.recognizer.device} if self.recognizer else None,
+            "llm": {"model": self.reasoner.model_id, "device": self.reasoner.device} if self.reasoner else None,
         }
 
-    def load(self, which=("mt", "asr")) -> None:
+    def reasoning_wanted(self) -> bool:
+        return bool(self._settings.get("reasoning")) and catalog.installed(self._settings.get("llmModel"))
+
+    def load(self, which=("asr", "llm", "mt")) -> None:
         with self._gate:
             device = self._settings.get("device")
-            if "mt" in which:
-                self.translator = None
-                self._load("mt", self._settings.get("mtModel"), device)
             if "asr" in which:
                 self.recognizer = None
                 self._load("asr", self._settings.get("asrModel"), device)
+            if "llm" in which:
+                old, self.reasoner = self.reasoner, None
+                if old:
+                    old.close()
+                if self._settings.get("reasoning"):
+                    self._load("llm", self._settings.get("llmModel"), device)
+                else:
+                    self.emit({"type": "engine", "kind": "llm", "state": "off"})
+            if "mt" in which:
+                self.translator = None
+                self._load("mt", self._settings.get("mtModel"), "cpu" if self.reasoning_wanted() else device)
+
+    def close(self) -> None:
+        if self.reasoner:
+            self.reasoner.close()
+            self.reasoner = None
 
     def _load(self, kind: str, model_id: str, device: str) -> None:
         if not catalog.installed(model_id):
@@ -72,10 +92,14 @@ class Engines:
                 from .translate import Translator
                 self.translator = Translator(model_id, device)
                 got = self.translator
-            else:
+            elif kind == "asr":
                 from .asr import Recognizer
                 self.recognizer = Recognizer(model_id, device)
                 got = self.recognizer
+            else:
+                from .reason import Reasoner
+                self.reasoner = Reasoner(model_id, device, log)
+                got = self.reasoner
             log(f"{kind} {model_id} on {got.device} in {time.time() - t:.1f}s")
             self.emit({"type": "engine", "kind": kind, "state": "ready", "model": model_id, "device": got.device})
         except Exception as e:
@@ -132,12 +156,14 @@ class Api:
         before = dict(self._settings.values)
         values = self._settings.update(patch or {})
         reload = []
-        if values["mtModel"] != before["mtModel"]:
-            reload.append("mt")
         if values["asrModel"] != before["asrModel"]:
             reload.append("asr")
+        if values["llmModel"] != before["llmModel"] or values["reasoning"] != before["reasoning"]:
+            reload += ["llm", "mt"]  # NLLB's device follows whether Penalar is on
+        if values["mtModel"] != before["mtModel"] and "mt" not in reload:
+            reload.append("mt")
         if values["device"] != before["device"]:
-            reload = ["mt", "asr"]
+            reload = ["asr", "llm", "mt"]
         if reload and not self._live:
             threading.Thread(target=self._engines.load, args=(tuple(reload),), daemon=True).start()
         if "overlaySize" in (patch or {}):
@@ -147,24 +173,44 @@ class Api:
     def detect(self, text: str):
         return detect.detect(text)
 
-    def translate(self, text: str, src: str, tgt: str, remember: bool = True) -> dict:
-        tr = self._engines.translator
-        if tr is None:
-            return {"error": "Penerjemah belum siap. Unduh atau pilih modelnya di tab Model."}
+    def translate(self, text: str, src: str, tgt: str, remember: bool = True, deep: bool = False) -> dict:
+        """Penalar when it is on and knows both languages, NLLB otherwise (and when Penalar gives nothing
+        usable). `deep` lets Penalar think first: the Translate button with Pikir lebih dalam, never typing."""
         guessed = None
         if src == "auto":
             guessed = detect.detect(text)
             src = guessed or ("en" if tgt != "en" else "id")
+        if src == tgt:
+            # Nothing to translate: no engine needed (one still loading must not turn this into an error).
+            return {"text": text, "note": "", "src": src, "guessed": guessed, "ms": 0, "device": None,
+                    "engine": "none", "deep": False}
+        rs, tr = self._engines.reasoner, self._engines.translator
+        if rs is None and tr is None:
+            return {"error": "Penerjemah belum siap. Unduh atau pilih modelnya di tab Model."}
         t = time.time()
-        try:
-            out = tr.translate(text, src, tgt)
-        except Exception as e:
-            log("translate failed: " + traceback.format_exc())
-            return {"error": f"Terjemahan gagal: {e}"}
+        out, note, engine, device = None, "", "nllb", None
+        if rs is not None and src != tgt and reason.handles(src, tgt):
+            try:
+                got = rs.translate_text(text, src, tgt, self._settings.get("textContext"), self._settings.get("words"), deep)
+                if got:
+                    out, note = got
+                    engine, device = "penalar", rs.device
+            except Exception:
+                log("penalar text failed: " + traceback.format_exc())
+        if out is None:
+            if tr is None:
+                return {"error": "Penalar tidak memberi terjemahan, dan NLLB belum siap."}
+            try:
+                out = tr.translate(text, src, tgt)
+                device = tr.device
+            except Exception as e:
+                log("translate failed: " + traceback.format_exc())
+                return {"error": f"Terjemahan gagal: {e}"}
         ms = round((time.time() - t) * 1000)
         if remember and self._settings.get("keepHistory") and text.strip() and src != tgt:
             self._history.add(src, tgt, text, out)
-        return {"text": out, "src": src, "guessed": guessed, "ms": ms, "device": tr.device}
+        return {"text": out, "note": note, "src": src, "guessed": guessed, "ms": ms, "device": device,
+                "engine": engine, "deep": bool(deep and engine == "penalar")}
 
     def clear_history(self) -> bool:
         self._history.clear()
@@ -178,11 +224,12 @@ class Api:
     def start_live(self, source: str, src: str, tgt: str, path: str | None = None) -> dict:
         if self._live:
             return {"error": "Sudah sedang mendengarkan."}
-        if not self._engines.recognizer or not self._engines.translator:
+        if not self._engines.recognizer or not (self._engines.translator or self._engines.reasoner):
             return {"error": "Pendengar atau penerjemah belum siap. Cek tab Model."}
         from .live import LiveSession
         self._live = LiveSession(self._engines.recognizer, self._engines.translator, self._records, source, src, tgt,
-                                self._live_event, wav_path=path, wav_speed=1.0)
+                                self._live_event, wav_path=path, wav_speed=1.0, reasoner=self._engines.reasoner,
+                                hints=self._hints)
         try:
             sid = self._live.start()
         except Exception as e:
@@ -190,6 +237,10 @@ class Api:
             return {"error": str(e)}
         log(f"live started {source} {src}->{tgt} {sid}")
         return {"sid": sid}
+
+    def _hints(self) -> tuple[str, str]:
+        """The meeting's topic and the word list, read per line so edits apply mid-meeting."""
+        return self._settings.get("liveTopic"), self._settings.get("words")
 
     def _live_event(self, event: dict) -> None:
         if event.get("type") in ("error", "file-done"):
@@ -214,7 +265,7 @@ class Api:
     def translate_file(self, src: str, tgt: str) -> dict:
         """Picks an audio or video file and translates it whole (Whisper reads any format through FFmpeg)."""
         import webview
-        if not self._engines.recognizer or not self._engines.translator:
+        if not self._engines.recognizer or not (self._engines.translator or self._engines.reasoner):
             return {"error": "Pendengar atau penerjemah belum siap. Cek tab Model."}
         picked = self._windows["main"].create_file_dialog(
             webview.FileDialog.OPEN, file_types=("Audio dan video (*.wav;*.mp3;*.m4a;*.mp4;*.mkv;*.webm;*.ogg;*.flac;*.aac)", "Semua berkas (*.*)"))
@@ -226,8 +277,10 @@ class Api:
 
     def _transcribe_file(self, path: str, src: str, tgt: str) -> None:
         from .core import TranscriptLine
+        from .live import interpret
         rec = self._engines.recognizer
-        tr = self._engines.translator
+        tr, rs = self._engines.translator, self._engines.reasoner
+        recent: list = []
         session = self._records.begin()
         sid = session.id
         self._records.rename(sid, os.path.splitext(os.path.basename(path))[0])
@@ -245,13 +298,14 @@ class Api:
                     text = s.text.strip()
                     if not text:
                         continue
-                    dst = tr.translate(text, lang, tgt, beam=4) if lang != tgt else None
                     count += 1
-                    line = TranscriptLine(id=f"h1-{count}", t=round(s.start, 2), speaker="them", src=text, dst=dst,
+                    line = TranscriptLine(id=f"h1-{count}", t=round(s.start, 2), speaker="them", src=text, dst=None,
                                           srcLang=lang, dstLang=tgt)
+                    note = interpret(line, rs, tr, recent, self._hints(), log, beam=4)
                     self._records.append(sid, line)
-                    self._emit({"type": "line", "sid": sid, "id": line.id, "t": line.t, "src": text, "dst": dst,
-                                "srcLang": lang, "dstLang": tgt})
+                    self._emit({"type": "line", "sid": sid, "id": line.id, "t": line.t, "src": line.shown, "dst": line.dst,
+                                "srcLang": lang, "dstLang": tgt, "note": note,
+                                "fixes": [[f.from_, f.to] for f in line.fixes or []]})
                     self._emit({"type": "file-progress", "value": min(1.0, s.end / total)})
             self._emit({"type": "file-progress", "value": 1.0})
         except Exception as e:
@@ -287,7 +341,7 @@ class Api:
         if not s:
             return {"error": "Rekaman tidak ditemukan."}
         return {"id": s.id, "title": self._title(s), "startedAt": s.startedAt.isoformat(),
-                "lines": [{"t": l.t, "src": l.src, "dst": l.dst, "srcLang": l.srcLang, "dstLang": l.dstLang}
+                "lines": [{"t": l.t, "src": l.shown, "dst": l.dst, "srcLang": l.srcLang, "dstLang": l.dstLang}
                           for l in self._records.lines(sid)]}
 
     def delete_session(self, sid: str) -> bool:
@@ -342,7 +396,9 @@ class Api:
             if not self._live:
                 if kind == "gpu":
                     self._engines.load()
-                elif self._settings.get("mtModel" if kind == "mt" else "asrModel") == model_id:
+                elif kind == "llm" and self._settings.get("llmModel") == model_id:
+                    self._engines.load(("llm", "mt"))
+                elif self._settings.get({"mt": "mtModel", "asr": "asrModel", "llm": "llmModel"}[kind]) == model_id:
                     self._engines.load((kind,))
         except InterruptedError:
             self._emit({"type": "download-failed", "id": model_id, "message": "Unduhan dibatalkan."})
@@ -358,6 +414,8 @@ class Api:
 
     def remove_model(self, model_id: str) -> dict:
         in_use = model_id in (self._settings.get("mtModel"), self._settings.get("asrModel"))
+        if model_id == self._settings.get("llmModel") and self._engines.reasoner:
+            in_use = True
         if in_use:
             return {"error": "Model ini sedang dipakai. Pilih model lain dulu."}
         catalog.remove(model_id)
@@ -446,6 +504,7 @@ def main() -> None:
 
     def closing():
         api.stop_live()
+        api._engines.close()
         bar = api._windows.pop("overlay", None)
         if bar:
             bar.destroy()

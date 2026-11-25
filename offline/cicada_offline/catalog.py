@@ -22,7 +22,7 @@ SPM = ("JustFrederik/nllb-200-distilled-600M-ct2-int8", "sentencepiece.bpe.model
 @dataclass(frozen=True)
 class Model:
     id: str
-    kind: str  # "mt" or "asr"
+    kind: str  # "mt", "asr" or "llm"
     title: str
     blurb: str
     repo: str
@@ -42,9 +42,25 @@ MODELS = [
           ("config.json", "model.bin", "tokenizer.json", "vocabulary.txt"), 150, "MIT"),
     Model("whisper-turbo", "asr", "Pendengar · Akurat", "Whisper large-v3 turbo", "deepdml/faster-whisper-large-v3-turbo-ct2",
           ("config.json", "model.bin", "preprocessor_config.json", "tokenizer.json", "vocabulary.json"), 1620, "MIT"),
+    # Penalar: Gemma 4 (Google, Apache-2.0) in unsloth's 4-bit GGUF, for llama.cpp.
+    Model("gemma4-e4b", "llm", "Penalar · Kualitas", "Gemma 4 E4B, paham konteks, idiom dan maksud", "unsloth/gemma-4-E4B-it-GGUF",
+          ("gemma-4-E4B-it-Q4_K_M.gguf",), 4746, "Apache-2.0"),
+    Model("gemma4-e2b", "llm", "Penalar · Ringan", "Gemma 4 E2B, lebih kecil dan cepat", "unsloth/gemma-4-E2B-it-GGUF",
+          ("gemma-4-E2B-it-Q4_K_M.gguf",), 2962, "Apache-2.0"),
 ]
 BY_ID = {m.id: m for m in MODELS}
-DEFAULT = {"mt": "nllb-1.3b", "asr": "whisper-small"}
+DEFAULT = {"mt": "nllb-1.3b", "asr": "whisper-small", "llm": "gemma4-e4b"}
+
+# llama.cpp's llama-server for Penalar: the Vulkan build runs on NVIDIA, AMD and Intel GPUs without a CUDA
+# download, and on the CPU otherwise. Pinned to one build; the zip is checked against its SHA-256.
+LLAMA = {
+    "id": "llama-vulkan",
+    "tag": "b12721",
+    "asset": "llama-b12721-bin-win-vulkan-x64.zip",
+    "sha256": "2e15aaf92807ef03b64c38ac52ad403770d4a67079ddfd00808bd86c51e20f4e",
+    "size": 39_100_000,
+    "license": "MIT",
+}
 
 # NVIDIA GPU speed-up: CTranslate2 already carries cuDNN; cuBLAS is the missing piece. Only its two
 # DLLs are kept from NVIDIA's PyPI wheel (pinned by SHA-256).
@@ -122,6 +138,61 @@ def download_gpu(progress=None, cancelled=lambda: False) -> None:
         os.remove(wheel)  # the wheel is only a carrier; the two DLLs stay
 
 
+def llama_folder() -> str:
+    return os.path.join(paths.models(), LLAMA["id"])
+
+
+def llama_installed() -> bool:
+    return os.path.isfile(os.path.join(llama_folder(), ".complete")) and         os.path.isfile(os.path.join(llama_folder(), "llama-server.exe"))
+
+
+def download_llama(progress=None, cancelled=lambda: False) -> None:
+    """The server's zip from llama.cpp's GitHub release (the URL comes from the release, the hash is pinned)."""
+    import zipfile
+
+    d = llama_folder()
+    os.makedirs(d, exist_ok=True)
+    marker = os.path.join(d, ".complete")
+    if os.path.exists(marker):
+        os.remove(marker)
+    req = urllib.request.Request(f"https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/{LLAMA['tag']}",
+                                 headers={"User-Agent": "cicada-offline", "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        url = next(a["browser_download_url"] for a in json.load(r)["assets"] if a["name"] == LLAMA["asset"])
+    part = os.path.join(d, "llama.zip.part")
+    digest = hashlib.sha256()
+    done = 0
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "cicada-offline"}), timeout=60) as r,             open(part, "wb") as out:
+        total = int(r.headers.get("Content-Length") or LLAMA["size"])
+        while chunk := r.read(1 << 20):
+            if cancelled():
+                out.close()
+                os.remove(part)
+                raise InterruptedError("download cancelled")
+            out.write(chunk)
+            digest.update(chunk)
+            done += len(chunk)
+            if progress:
+                progress(done, total)
+    try:
+        if digest.hexdigest() != LLAMA["sha256"]:
+            raise RuntimeError("llama.cpp: SHA-256 does not match the pinned build")
+        with zipfile.ZipFile(part) as z:
+            for name in z.namelist():
+                target = os.path.realpath(os.path.join(d, name))
+                if not target.startswith(os.path.realpath(d) + os.sep):
+                    raise RuntimeError(f"llama.cpp zip: unsafe path {name}")
+            z.extractall(d)
+    finally:
+        os.remove(part)
+    with open(marker, "w") as f:
+        f.write(LLAMA["tag"])
+
+
+def gguf_path(model_id: str) -> str:
+    return os.path.join(folder(model_id), BY_ID[model_id].files[0])
+
+
 def folder(model_id: str) -> str:
     return os.path.join(paths.models(), model_id)
 
@@ -137,6 +208,8 @@ def _wanted(m: Model) -> list[tuple[str, str]]:
 def installed(model_id: str) -> bool:
     m = BY_ID[model_id]
     d = folder(model_id)
+    if m.kind == "llm" and not llama_installed():
+        return False
     return os.path.isfile(os.path.join(d, ".complete")) and all(
         os.path.isfile(os.path.join(d, f)) for _, f in _wanted(m))
 
@@ -155,6 +228,8 @@ def download(model_id: str, progress=None, cancelled=lambda: False) -> None:
     """Fetches every file of the model; `progress(done_bytes, total_bytes)` as it goes. Already
     complete files are kept, so a broken download picks up where it stopped (per file)."""
     m = BY_ID[model_id]
+    if m.kind == "llm" and not llama_installed():
+        download_llama(None, cancelled)  # 38 MB, before the model so the model's progress bar is the real one
     d = folder(model_id)
     os.makedirs(d, exist_ok=True)
     marker = os.path.join(d, ".complete")
@@ -203,6 +278,8 @@ def remove(model_id: str) -> None:
     """Deletes one downloaded model folder (the user asked for it in Settings)."""
     if model_id == GPU["id"]:
         d = gpu_folder()
+    elif model_id == LLAMA["id"]:
+        d = llama_folder()
     elif model_id in BY_ID:
         d = folder(model_id)
     else:
