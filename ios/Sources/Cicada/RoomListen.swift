@@ -248,7 +248,6 @@ final class RoomListen: ObservableObject {
             startedAt = s.startedAt
             notes.begin(s.id)
             audio.voices = voices
-            audio.mix = speakerMode
             audio.onInterruption = { [weak self] began in self?.interrupted(began) }
             // 保存会议录音 off: nothing is written; voiceprints still read the last minute in memory.
             let keep = UserDefaults.standard.bool(forKey: Pref.recordAudio)
@@ -814,8 +813,6 @@ final class RoomListen: ObservableObject {
 /// the meeting's recording, a level and the last minute of 16 kHz audio for voiceprints.
 final class RoomAudio: @unchecked Sendable {
     var voices = true
-    /// 手机外放: other apps keep playing beside us (without it, starting stops their audio).
-    var mix = false
     var onLevel: (@MainActor (Float) -> Void)?
     /// true when a call, Siri or another app takes the audio, false when it gives it back.
     var onInterruption: (@MainActor (Bool) -> Void)?
@@ -888,7 +885,9 @@ final class RoomAudio: @unchecked Sendable {
         let session = AVAudioSession.sharedInstance()
         // .measurement: no voice processing, which would duck what the room says as "echo".
         // .defaultToSpeaker sends every app's sound to the speaker, not the earpiece, while we record.
-        try session.setCategory(.playAndRecord, mode: .measurement, options: mix ? [.defaultToSpeaker, .mixWithOthers] : [.defaultToSpeaker])
+        // .mixWithOthers in both modes: listening plays nothing, and a non-mixable session would stop
+        // a video that's playing when 开始听 is tapped, and be stopped itself when one starts.
+        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .mixWithOthers])
         try session.setActive(true)
         engine = AVAudioEngine()
         queue.sync {
