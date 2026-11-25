@@ -26,11 +26,12 @@ UNSURE_WORDS = 0.5  # Whisper's word confidence under which Penalar is told the 
 
 
 def interpret(line, reasoner, translator, recent: list, hints: tuple, log=lambda m: None, beam: int = 2,
-              unsure: bool = False) -> str:
+              unsure: bool = False, style: str = "casual") -> str:
     """Fills in a heard line's translation: Penalar with the lines before it (fixing misheard words into
     `line.fixes`, Cicada's own field, so `line.shown` and the records carry them), NLLB when Penalar is off,
     doesn't know the pair or gives nothing usable. `recent` is the running context, updated here. `unsure`
-    says Whisper doubted the words, so Penalar guesses less. Returns Penalar's note on what was meant, or ""."""
+    says Whisper doubted the words, so Penalar guesses less. `style`: everyday or formal wording
+    (reason.STYLES); NLLB has one way of writing only. Returns Penalar's note on what was meant, or ""."""
     src, tgt = line.srcLang, line.dstLang
     note = ""
     if src == tgt and reasoner is not None and reasoner.alive and reason.handles(src, tgt):
@@ -44,7 +45,7 @@ def interpret(line, reasoner, translator, recent: list, hints: tuple, log=lambda
         if reasoner is not None and reasoner.alive and reason.handles(src, tgt):
             try:
                 topic, words = hints
-                got = reasoner.translate_line(line.src, src, tgt, recent, topic, words, unsure=unsure)
+                got = reasoner.translate_line(line.src, src, tgt, recent, topic, words, unsure=unsure, style=style)
                 if got:
                     line.dst = got.translation
                     line.fixes = [LineFix(from_=a, to=b) for a, b in got.fixes] or None
@@ -61,8 +62,9 @@ def interpret(line, reasoner, translator, recent: list, hints: tuple, log=lambda
 class LiveSession:
     def __init__(self, recognizer, translator, store: SessionStore, source: str, src: str, tgt: str,
                  on_event, wav_path: str | None = None, wav_speed: float = 1.0, reasoner=None,
-                 hints=lambda: ("", ""), candidates=None):
+                 hints=lambda: ("", ""), candidates=None, style=lambda: "casual"):
         self.recognizer, self.translator, self.store = recognizer, translator, store
+        self.style = style  # read per line, so switching Sehari-hari / Formal applies mid-meeting
         self.candidates = list(candidates or [])
         self.reasoner, self.hints = reasoner, hints
         self._recent: list = []
@@ -257,7 +259,7 @@ class LiveSession:
         behind = self._finish.qsize() >= 1 and self.translator is not None
         t0 = time.monotonic()
         note = interpret(line, None if behind else self.reasoner, self.translator, self._recent, self.hints(),
-                         unsure=unsure)
+                         unsure=unsure, style=self.style())
         self.lines += 1
         self.store.append(self.sid, line)
         self._emit({"type": "line", "sid": self.sid, "id": line.id, "t": line.t, "src": line.shown, "dst": line.dst,

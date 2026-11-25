@@ -90,14 +90,44 @@ class Pairs(unittest.TestCase):
             self.assertIn(l.id, reason.ENGLISH, l.id)
 
 
+class Styles(unittest.TestCase):
+    """Sehari-hari / Formal: the register rule each prompt carries, in the target language's terms."""
+
+    def test_everyday_indonesian_names_its_words(self):
+        rule = reason.style_rule("casual", "id")
+        self.assertIn("everyday spoken Indonesian", rule)
+        self.assertIn('"nggak"', rule)
+
+    def test_formal_korean_asks_for_hapsyo(self):
+        rule = reason.style_rule("formal", "ko")
+        self.assertIn("formal Korean", rule)
+        self.assertIn("합쇼체", rule)
+
+    def test_other_languages_get_the_general_rule_and_unknown_is_everyday(self):
+        self.assertEqual(reason.style_rule("formal", "de"), reason._STYLE["formal"].replace("{tgt}", "German"))
+        self.assertEqual(reason.style_rule("???", "de"), reason.style_rule("casual", "de"))
+
+    def test_prompts_carry_the_rule_and_still_format(self):
+        for system in (reason.TEXT_SYSTEM, reason.LINE_SYSTEM):
+            got = system.format(src="Korean", tgt="Indonesian", style=reason.style_rule("formal", "id"))
+            self.assertIn('"saya/Anda"', got)
+            self.assertNotIn("{tgt}", got)
+            self.assertNotIn("Keep the tone", got)  # the old rule kept a stiff source stiff
+
+    def test_the_line_gets_the_chosen_style(self):
+        r = FakeReasoner(reason.Line("Saya tidak tahu.", [], ""))
+        interpret(heard("I don't know"), r, None, [], ("", ""), style="formal")
+        self.assertEqual(r.style, "formal")
+
+
 class FakeReasoner:
     alive = True
 
     def __init__(self, line=None, fail=False):
         self.line, self.fail, self.seen = line, fail, []
 
-    def translate_line(self, text, src, tgt, recent, topic, words, unsure=False):
-        self.unsure = unsure
+    def translate_line(self, text, src, tgt, recent, topic, words, unsure=False, style="casual"):
+        self.unsure, self.style = unsure, style
         self.seen.append((text, list(recent), topic, words))
         if self.fail:
             raise TimeoutError("slow")

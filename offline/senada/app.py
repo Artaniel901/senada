@@ -233,7 +233,8 @@ class Api:
         out, note, engine, device = None, "", "nllb", None
         if rs is not None and src != tgt and reason.handles(src, tgt):
             try:
-                got = rs.translate_text(text, src, tgt, self._settings.get("textContext"), self._settings.get("words"), deep)
+                got = rs.translate_text(text, src, tgt, self._settings.get("textContext"), self._settings.get("words"), deep,
+                                        style=self._style())
                 if got:
                     out, note = got
                     engine, device = "penalar", rs.device
@@ -271,7 +272,7 @@ class Api:
         from .live import LiveSession
         self._live = LiveSession(self._engines.recognizer, self._engines.translator, self._records, source, src, tgt,
                                 self._live_event, wav_path=path, wav_speed=1.0, reasoner=self._engines.reasoner,
-                                hints=self._hints, candidates=self._settings.get("liveLangs"))
+                                hints=self._hints, candidates=self._settings.get("liveLangs"), style=self._style)
         try:
             sid = self._live.start()
         except Exception as e:
@@ -283,6 +284,10 @@ class Api:
     def _hints(self) -> tuple[str, str]:
         """The meeting's topic and the word list, read per line so edits apply mid-meeting."""
         return self._settings.get("liveTopic"), self._settings.get("words")
+
+    def _style(self) -> str:
+        """Sehari-hari or Formal (reason.STYLES): how Penalar's translations read, text and live alike."""
+        return self._settings.get("style")
 
     def _live_event(self, event: dict) -> None:
         if event.get("type") == "device":
@@ -350,7 +355,7 @@ class Api:
                     count += 1
                     line = TranscriptLine(id=f"h1-{count}", t=round(s.start, 2), speaker="them", src=text, dst=None,
                                           srcLang=lang, dstLang=tgt)
-                    note = interpret(line, rs, tr, recent, self._hints(), log, beam=4)
+                    note = interpret(line, rs, tr, recent, self._hints(), log, beam=4, style=self._style())
                     self._records.append(sid, line)
                     self._emit({"type": "line", "sid": sid, "id": line.id, "t": line.t, "src": line.shown, "dst": line.dst,
                                 "srcLang": lang, "dstLang": tgt, "note": note,

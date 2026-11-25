@@ -89,6 +89,7 @@ function setupText() {
   $('deep').checked = !!state.settings.thinkDeep;
   $('deep').addEventListener('change', () => save({ thinkDeep: $('deep').checked }));
   keepTyped($('textContext'), 'textContext', () => { lastAsked = ''; });
+  setupStyle();
   $('clearSrc').addEventListener('click', () => { src.value = ''; $('dstText').textContent = ''; showNote(''); $('detected').textContent = ''; $('count').textContent = '0'; src.focus(); });
   $('copyDst').addEventListener('click', async () => {
     const text = $('dstText').textContent;
@@ -119,6 +120,25 @@ function showNote(text) {
 }
 
 const penalarOn = () => !!state.engines.llm;
+
+// Sehari-hari / Formal: one setting, a switch on both pages; live picks it up from the next line.
+function setupStyle() {
+  const show = () => {
+    for (const b of document.querySelectorAll('.style-switch button')) {
+      b.setAttribute('aria-pressed', String(b.dataset.style === (state.settings.style || 'casual')));
+    }
+  };
+  for (const b of document.querySelectorAll('.style-switch button')) {
+    b.addEventListener('click', async () => {
+      if (b.dataset.style === state.settings.style) return;
+      await save({ style: b.dataset.style });
+      show();
+      lastAsked = '';
+      translateNow();  // the text already on the page, in the new style
+    });
+  }
+  show();
+}
 
 async function translateNow(pressed = false) {
   const text = $('srcText').value;
