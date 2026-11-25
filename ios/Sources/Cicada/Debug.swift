@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import os
 
 /// The iOS side of the Mac's `AppModel.debugCommand`. `ios/scripts/ctl.sh <cmd>` writes the command
 /// into the container's Caches/debug-command and posts a Darwin notification, which wakes us here;
@@ -390,6 +391,7 @@ extension AppModel {
         case "importState":
             debugLog("import busy=\(importer.busy) phase=\(importer.phase) progress=\(String(format: "%.2f", importer.progress)) queue=\(importer.queue.count) current=\(importer.current?.id ?? "-")")
         case "state":
+            debugLog("memory \(DeviceLoad.line)")
             debugLog("room running=\(room.isRunning) lines=\(room.lines.count) draft=\(room.draft.count) level=\(room.level) status=\(room.status) speaker=\(room.speakerMode) paused=\(room.paused) pip=\(pip.isActive) session=\(room.sessionID ?? "-")")
             debugLog("state tab=\(tab.rawValue) selection=\(selection ?? "-") page=\(recordPage) sessions=\(store.sessions.count) query=\(query) notesLang=\(notesLanguageCode(selection ?? store.sessions.first?.id ?? "")) undo=\(speakerUndo?.text ?? "-")")
         default:
@@ -439,4 +441,22 @@ struct DevWindow: ViewModifier {
 
 private extension Array where Element == String {
     var splitPair: (String, String) { (first ?? "", count > 1 ? self[1] : "") }
+}
+
+/// What the phone has left while listening: how much the app takes, how much more it may take before
+/// iOS ends it, and how warm it runs. Logged by `state` so a real-device pass can show whether a
+/// second recognizer (the record's) fits.
+enum DeviceLoad {
+    static var footprintMB: Int {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let r = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) }
+        }
+        return r == KERN_SUCCESS ? Int(info.phys_footprint / 1_048_576) : -1
+    }
+    static var line: String {
+        let thermal = ["nominal", "fair", "serious", "critical"][ProcessInfo.processInfo.thermalState.rawValue]
+        return "footprint=\(footprintMB)MB available=\(os_proc_available_memory() / 1_048_576)MB thermal=\(thermal)"
+    }
 }
