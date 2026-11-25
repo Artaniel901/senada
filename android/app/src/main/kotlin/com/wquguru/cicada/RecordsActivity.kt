@@ -307,6 +307,9 @@ class RecordActivity : Activity() {
         if (n == 0) return
         matchIndex = (matchIndex.coerceIn(0, n - 1) + d + n) % n
         if (tab != 1) { tab = 1; render() }
+        // While the recording plays, going to a line found stops following it, as a finger does:
+        // otherwise the next line heard yanks the page back within seconds.
+        if (following && player?.isPlaying == true) { following = false; showBackToPlaying() }
         showMatchBar()
         adapter.notifyDataSetChanged()
         list.post { goToMatch() }
