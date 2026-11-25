@@ -232,3 +232,115 @@ struct ImportCard: View {
 private extension String {
     var isVideo: Bool { UTType(filenameExtension: self)?.conforms(to: .movie) ?? false }
 }
+
+extension AppModel {
+    /// 重新转写: a record that stopped halfway (the system took the background time back, or 停止),
+    /// or one heard badly, transcribed again from its file or recording; the old transcript is backed up.
+    func retranscribe(_ id: String, lang: Lang? = nil) {
+        importer.retry(id, lang: lang)
+        guard importer.current?.id == id || importer.queue.contains(where: { $0.id == id }) else { return }
+        ImportBackground.begin(store.session(id)?.displayTitle ?? "")
+    }
+
+    /// Whether 重新转写 has something to hear: the imported file's copy, or the meeting's recording.
+    func canRetranscribe(_ s: Session) -> Bool {
+        if let path = s.sourcePath, FileManager.default.fileExists(atPath: path) { return true }
+        return [store.systemAudioURL(s.id), store.micAudioURL(s.id), store.roomAudioURL(s.id)]
+            .contains { FileManager.default.fileExists(atPath: $0.path) }
+    }
+}
+
+/// 重新转写 by language, for a record's menus: not while it is live or being transcribed.
+struct RetranscribeMenu: View {
+    @EnvironmentObject var model: AppModel
+    @ObservedObject var importer: FileImporter
+    let session: Session
+
+    var body: some View {
+        if session.id != model.store.liveID, importer.status(of: session) == nil || importer.status(of: session) == .unfinished,
+           model.canRetranscribe(session) {
+            Menu {
+                ForEach(sourceLanguages, id: \.locale) { lang in
+                    Button(lang.name) { model.retranscribe(session.id, lang: lang) }
+                }
+            } label: { Label("重新转写", systemImage: "waveform.badge.magnifyingglass") }
+        }
+    }
+}
+
+/// Under an imported record's title, as on the Mac: queued, how far transcribing got, or that it
+/// stopped, with 重新转写.
+struct ImportStatusStrip: View {
+    @EnvironmentObject var model: AppModel
+    @ObservedObject var importer: FileImporter
+    let session: Session
+
+    var body: some View {
+        if let status = importer.status(of: session) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Text(title(status)).font(.subheadline).foregroundStyle(Ink.ink)
+                    Spacer(minLength: 8)
+                    if status == .running, importer.phase == .transcribing || importer.phase == .translating {
+                        Text(verbatim: "\(Int(importer.progress * 100))%").font(.subheadline.monospacedDigit()).foregroundStyle(Ink.secondary)
+                    } else if status == .unfinished, model.canRetranscribe(session) {
+                        Button { model.retranscribe(session.id) } label: {
+                            Text("重新转写").font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                                .padding(.horizontal, 14).frame(minHeight: 32)
+                                .background(Ink.ink, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .frame(minHeight: 44)
+                    }
+                }
+                if status == .running {
+                    ProgressView(value: importer.phase == .transcribing || importer.phase == .translating ? importer.progress : 0).tint(Ink.ink)
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Ink.ground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+
+    private func title(_ status: FileImporter.Status) -> String {
+        switch status {
+        case .queued(let ahead): ahead > 0 ? L("排队中，前面还有 \(ahead) 个文件") : L("排队中")
+        case .unfinished: model.canRetranscribe(session) ? L("没转完") : L("没转完，原文件已不在原来的位置")
+        case .running:
+            switch importer.phase {
+            case .preparing: L("正在读取文件…")
+            case .detecting: L("正在听是哪种语言…")
+            case .downloading(let name): L("正在下载 \(name) 语音模型…")
+            case .transcribing: L("文字记录已转到 \(TranscriptExport.clock(importer.heard)) / \(TranscriptExport.clock(importer.duration))")
+            case .translating: L("还有 \(importer.untranslated) 句在翻译")
+            }
+        }
+    }
+}
+
+/// The list row's word for a record still being worked on, as on the Mac.
+struct ImportRowTag: View {
+    @ObservedObject var importer: FileImporter
+    let session: Session
+
+    var body: some View {
+        if let status = importer.status(of: session) {
+            Text(tag(status)).font(.footnote.weight(.semibold))
+                .foregroundStyle(status == .unfinished ? Ink.accentText : Ink.secondary).lineLimit(1)
+        }
+    }
+
+    private func tag(_ status: FileImporter.Status) -> String {
+        switch status {
+        case .queued: L("排队中")
+        case .unfinished: L("没转完")
+        case .running:
+            switch importer.phase {
+            case .transcribing: L("转写中 \(Int(importer.progress * 100))%")
+            case .translating: L("翻译中")
+            default: L("准备中")
+            }
+        }
+    }
+}

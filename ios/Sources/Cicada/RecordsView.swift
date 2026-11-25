@@ -222,6 +222,7 @@ struct RecordGroups: View {
         if s.renamed ?? !s.title.hasPrefix("会议 "), s.notes?.title != nil {
             Button { model.rename(s.id, to: "") } label: { Label("恢复自动标题", systemImage: "arrow.uturn.backward") }
         }
+        RetranscribeMenu(importer: model.importer, session: s)
         Button(role: .destructive) { model.deleteSession(s.id) } label: { Label("删除", systemImage: "trash") }
             .disabled(s.id == model.store.liveID)
     }
@@ -235,6 +236,7 @@ struct RowPress: ButtonStyle {
 }
 
 struct RecordRow: View {
+    @EnvironmentObject var model: AppModel
     let session: Session
     let chevron: Bool
     /// Watched here so "3 人" comes and goes with 说话人识别 (a row's session doesn't change).
@@ -252,10 +254,13 @@ struct RecordRow: View {
                     .foregroundStyle(Ink.ink)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
-                Text(Self.meta(session, voices: voices))
-                    .font(.footnote)
-                    .foregroundStyle(Ink.secondary)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    ImportRowTag(importer: model.importer, session: session)
+                    Text(Self.meta(session, voices: voices))
+                        .font(.footnote)
+                        .foregroundStyle(Ink.secondary)
+                        .lineLimit(1)
+                }
             }
             .padding(.leading, runs.isEmpty ? 0 : 14)
             // Scheme A's upright strip: each person's turns in grey, a bookmark of the meeting.

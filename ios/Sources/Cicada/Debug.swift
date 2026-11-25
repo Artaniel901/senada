@@ -80,6 +80,13 @@ extension AppModel {
             })
         case "importStop":
             if let id = importer.current?.id { importer.cancel(id) }
+        case "importRetry":
+            // importRetry:<id>[=<locale>], as on the Mac: 重新转写 (in that language).
+            let parts = arg.split(separator: "=", maxSplits: 1).map(String.init)
+            retranscribe(parts[0], lang: parts.count > 1 ? sourceLanguages.first { $0.locale == parts[1] } : nil)
+        case "importExpire":
+            // What the system's expiration handler does when it takes the background time back.
+            importer.cancelAll()
         case "hear":
             // hear:room|speaker, 声音来源
             UserDefaults.standard.set(arg == "speaker" ? "speaker" : "room", forKey: Pref.hear)

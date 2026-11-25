@@ -42,6 +42,7 @@ struct RecordView: View {
                 Text(Self.meta(session))
                     .font(.footnote).foregroundStyle(Ink.secondary)
                     .padding(.top, 4)
+                ImportStatusStrip(importer: model.importer, session: session).padding(.top, 12)
                 let numbers = voicesOn ? TranscriptExport.speakerNumbers(session) : [:]
                 let runs = SpeakerRail.runs(session, numbers: numbers)
                 let focus = picked ?? playingNumber(numbers)
