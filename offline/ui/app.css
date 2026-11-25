@@ -64,7 +64,7 @@ h1 {
   font-stretch: 80%;
   letter-spacing: -0.01em;
 }
-.sub { margin: 4px 0 0; color: var(--dim); font-size: 13px; }
+.sub { margin: 4px 0 0; color: var(--dim); font-size: 13px; max-width: 30ch; }  /* two short lines beside the name */
 #nav { justify-self: center; margin-bottom: -2px; }
 .engine {
   display: flex; align-items: center; gap: 8px; padding-bottom: 22px;
@@ -93,7 +93,7 @@ hr { border: 0; border-top: 2px dashed var(--paper-line); margin: 18px 0; }
 .pair { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 18px; margin-bottom: 18px; }
 .langbar { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .pair .side { padding-top: 12px; }
-.langbar select, .field select {
+.langbar select, .field select, .hear select {
   font: 600 14px var(--text);
   color: var(--ink);
   background: var(--card);
@@ -108,6 +108,10 @@ hr { border: 0; border-top: 2px dashed var(--paper-line); margin: 18px 0; }
   cursor: pointer;
   max-width: 190px;
 }
+/* The languages "auto" chooses from: Sakuga checkboxes in a wrapping row, the add-list under them */
+.hear-langs { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-bottom: 10px; }
+.hear-langs sakuga-checkbox { font-size: 14px; }
+.hear .hint { margin: 8px 0 0; }
 select:focus-visible, textarea:focus-visible, .plain:focus-visible, .record:focus-visible {
   outline: 3px solid var(--pink); outline-offset: 2px;
 }

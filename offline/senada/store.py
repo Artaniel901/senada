@@ -18,11 +18,13 @@ DEFAULTS = {
     "textContext": "",  # text tab: what the text is about
     "liveTopic": "",  # live: what the meeting is about
     "words": "",  # names and terms, one per line: spelled this way in every translation
+    "slang": "",  # the user's own slang, one per line `word = meaning`, on top of senada/slang/ (slang.py)
     "device": "auto",  # auto | cpu
     "textSrc": "auto",
     "textTgt": "ko",
     "liveSource": "system",  # system | mic
     "liveSrc": "auto",
+    "liveLangs": ["id", "ko", "en"],  # what "auto" chooses from while listening (speech.py, asr.py)
     "liveTgt": "id",
     "overlay": False,
     "overlaySize": 28,

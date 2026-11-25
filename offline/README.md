@@ -19,6 +19,12 @@ itu dengan model yang jalan di komputer ini. Internet hanya dipakai sekali untuk
   jadi kata yang salah dengar ("Coevisien", "fluk semasa") dibetulkan jadi "Koefisien" dan "fluks massa".
   Kalau maknanya tidak sama dengan kata-katanya (idiom, sindiran, basa-basi), ada catatan pendek.
   Untuk kalimat yang sangat aneh, nyalakan **Pikir lebih dalam** di tab Teks (sekitar 10–30 detik).
+- **Kamus bahasa gaul** (baru di 0.3.0): sekitar 370 kata gaul Indonesia, Korea dan Inggris
+  (`senada/slang/*.tsv`), misalnya gabut, julid, zonk, 어쩔티비, 점메추, "ate and left no crumbs". Kata
+  yang ditemukan di kalimat diberikan ke Penalar beserta artinya. NLLB tidak bisa membaca catatan, jadi
+  kata yang aman diganti ditukar dulu dengan kata bakunya ("mager" jadi "malas bergerak"). Kata yang
+  juga punya arti biasa (cabut, garing, bet) hanya diberi catatan. Kata gaul Anda sendiri bisa
+  ditambahkan di tab Model, **Bahasa gaul**, satu per baris: `kata = artinya`.
 
 - **Teks**: ketik atau tempel teks, lalu terjemahkan antar **202 bahasa**, yaitu semua bahasa yang
   dikenal NLLB-200. Indonesia, Korea dan Inggris ada di depan; sisanya urut abjad di "Bahasa lain".
@@ -29,6 +35,15 @@ itu dengan model yang jalan di komputer ini. Internet hanya dipakai sekali untuk
 - **Suara langsung**: mendengarkan suara komputer (rapat, video, siaran) atau mikrofon. Setiap
   kalimat ditulis beserta terjemahannya, dan bahasanya dideteksi per kalimat, jadi rapat
   campuran Korea–Indonesia–Inggris tetap terbaca benar.
+  - Kalimat dipotong di jeda ucapan (Silero VAD), bukan di jeda bunyi, jadi musik latar tidak
+    menggabungkan atau memotong kalimat, dan musik tanpa suara orang tidak ditulis.
+  - Deteksi otomatis hanya memilih dari **Bahasa yang mungkin terdengar** (bawaannya Indonesia,
+    Korea, Inggris). Memilih dari 99 bahasa membuat bahasa Indonesia terbaca sebagai Jawa atau Vietnam.
+  - Teks yang tidak mungkin ucapan (huruf berulang, aksara yang salah) dibuang. Kalimat yang
+    pendengarnya ragu ditandai, dan Penalar tidak mengarang makna untuknya; kalau sama sekali tidak
+    jelas, terjemahannya "…" dengan catatan.
+  - Dengan GPU NVIDIA, pakai **Pendengar · Akurat** (Whisper large-v3 turbo). Di GPU 6 GB ia muat
+    bersama Penalar · Kualitas (puncak sekitar 5,5 GB).
 - **Subtitle melayang**: bilah subtitle yang selalu di atas jendela lain. Bisa diseret dan
   ukuran hurufnya bisa diatur.
 - **Berkas rekaman**: menerjemahkan audio atau video (mp3, m4a, wav, mp4, mkv, …).
@@ -107,6 +122,11 @@ Yang baru ada di `senada/`:
 ```
 
 - `tools/try_live.py` menjalankan alur langsung pada berkas WAV tanpa jendela.
+- `tools/try_slang.py <hasil.tsv>` mencoba kalimat gaul di `tests/slang_cases.tsv` lewat Penalar dan
+  NLLB; `--no-slang` membandingkan tanpa kamus.
+- `tools/get_fleurs.py <folder> id_id:25 ko_kr:25 en_us:25` mengambil potongan rekaman orang dari
+  Google FLEURS (CC-BY 4.0) tanpa mengunduh arsip penuhnya; `tools/try_hearing.py --hear id,ko,en <folder>`
+  menghitung bahasa yang terdengar benar, kata yang salah dan waktu Whisper per klip.
 - `tools/make_icon.py` menggambar ulang `senada.ico` dari `ui/senada.svg` (butuh Chrome atau Edge).
 - `SENADA_HOME` memindahkan folder `data/`, misalnya untuk uji.
 - `SENADA_MODELS` memindahkan folder `models/`.
@@ -121,6 +141,9 @@ Komponen Sakuga ada di `ui/vendor/sakuga/` dan tidak diubah. Gayanya hanya diatu
 ## Batasan
 
 - Hanya untuk Windows. Penangkap suara memakai WASAPI. Belum ada versi HP.
+- Bahasa Jawa yang diucapkan terdengar sebagai bahasa Indonesia, dan tulisannya banyak yang salah
+  (uji FLEURS: 15 dari 15 klip). Whisper hampir tidak dilatih bahasa Jawa. Bahasa Melayu baru
+  terdengar benar kalau dicentang di **Bahasa yang mungkin terdengar** (9 dari 15 klip).
 - Mutu terjemahan bahasa kecil bervariasi. Bahasa besar (Islandia, Zulu, Marathi, Cebuano) bagus;
   bahasa dengan sedikit data, misalnya Banjar dalam huruf Jawi atau Kashmir dalam Dewanagari, bisa
   memotong atau mencampur kalimat.

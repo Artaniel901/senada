@@ -23,7 +23,7 @@
     <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><!-- same drawing as ui/senada.svg --><rect class="cel-shadow" x="9" y="9" width="52" height="52" rx="14"/><rect class="cel" x="4" y="4" width="52" height="52" rx="14"/><path class="voice pink" d="M12 40C19 40 20 24 27 24S34 30 40 30"/><path class="voice" d="M12 20C19 20 20 36 27 36S34 30 40 30H48"/></svg>
     <div>
       <h1>Senada</h1>
-      <p class="sub">Terjemahan yang paham maksud. Semuanya di komputer ini, tidak ada yang dikirim ke internet.</p>
+      <p class="sub">Terjemahan yang paham maksud. Semuanya berjalan di komputer ini.</p>
     </div>
   </div>
   <sakuga-tabs id="nav" label="Halaman">
@@ -96,6 +96,12 @@
         <div class="row">
           <label class="field"><span>Bahasa yang diucapkan</span><select id="liveSrc"></select></label>
         </div>
+        <div class="row hear" id="hearRow">
+          <span class="field-label">Bahasa yang mungkin terdengar</span>
+          <div class="hear-langs" id="hearLangs"></div>
+          <select id="hearMore" title="Tambah bahasa yang mungkin terdengar"></select>
+          <p class="hint">Deteksi hanya memilih dari yang dicentang. Makin sedikit, makin tepat.</p>
+        </div>
         <div class="row">
           <span class="field-label">Terjemahkan ke</span>
           <div class="langbar" id="liveTgtBar"></div>
@@ -160,6 +166,10 @@
           <textarea id="words" rows="4" spellcheck="false" maxlength="4000" placeholder="Satu per baris, misalnya:&#10;fluks massa&#10;Kookmin University"></textarea>
         </label>
         <p class="hint">Ditulis persis seperti ini di setiap terjemahan, dan dipakai untuk membetulkan kata yang salah dengar.</p>
+        <label class="field words"><span>Bahasa gaul</span>
+          <textarea id="slang" rows="4" spellcheck="false" maxlength="8000" placeholder="Satu per baris, kata = artinya, misalnya:&#10;gabut = bosan, tidak ada kerjaan&#10;킹받네 = bikin kesal banget"></textarea>
+        </label>
+        <p class="hint">Senada sudah kenal sekitar 400 kata gaul Indonesia, Korea dan Inggris. Tambahkan yang belum dikenalnya di sini.</p>
       </div>
       <div class="cel">
         <h2>Penerjemah</h2>

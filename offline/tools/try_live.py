@@ -1,6 +1,7 @@
 """Feeds WAV files through the live pipeline (no window, no sound card) and prints each line.
 
-    python -X utf8 tools/try_live.py [--penalar [model]] [--topic T] [--words W] <target-lang> <file.wav> [more.wav ...]
+    python -X utf8 tools/try_live.py [--penalar [model]] [--asr whisper-turbo] [--hear id,ko,en] [--topic T]
+        [--words W] <target-lang> <file.wav> [more.wav ...]
 
 Records go to a throwaway folder (SENADA_HOME, or a temp dir); models come from the app."""
 from __future__ import annotations
@@ -25,7 +26,7 @@ from senada.translate import Translator  # noqa: E402
 
 
 def main(argv: list[str]) -> int:
-    reasoner, topic, words = None, "", ""
+    reasoner, topic, words, asr_model, hear = None, "", "", None, None
     t = time.time()
     while argv and argv[0].startswith("--"):
         flag = argv.pop(0)
@@ -37,9 +38,13 @@ def main(argv: list[str]) -> int:
             topic = argv.pop(0)
         elif flag == "--words":
             words = argv.pop(0)
+        elif flag == "--asr":
+            asr_model = argv.pop(0)
+        elif flag == "--hear":  # the languages "auto" chooses from, comma-separated (the app's liveLangs)
+            hear = argv.pop(0).split(",")
     tgt, files = argv[0], argv[1:]
     Paths.home_override = paths.data()
-    recognizer, translator = Recognizer(), Translator(device="cpu" if reasoner else "auto")
+    recognizer, translator = Recognizer(asr_model), Translator(device="cpu" if reasoner else "auto")
     print(f"engines {time.time() - t:.1f}s  whisper={recognizer.device} nllb={translator.device}"
           f" penalar={reasoner.device if reasoner else 'off'}")
     store = SessionStore()
@@ -47,7 +52,7 @@ def main(argv: list[str]) -> int:
     for f in files:
         events: list[dict] = []
         session = LiveSession(recognizer, translator, store, "file", "auto", tgt, events.append, wav_path=f, wav_speed=0,
-                              reasoner=reasoner, hints=lambda: (topic, words))
+                              reasoner=reasoner, hints=lambda: (topic, words), candidates=hear)
         t = time.time()
         session.start()
         session._source._thread.join()

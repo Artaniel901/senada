@@ -1,38 +1,44 @@
-"""Live listening, Cicada's way but on this computer: a source's audio -> Cicada's segmenter ->
-Whisper -> NLLB -> a line in the meeting record, and an event for the window. Lines are delivered in
-segment order by one worker, so a slow sentence never jumps ahead of the next.
+"""Live listening, Cicada's way but on this computer: a source's audio -> the speech segmenter (Silero
+VAD, speech.py; Cicada's loudness segmenter only if it can't load) -> Whisper -> Penalar or NLLB -> a line
+in the meeting record, and an event for the window. Lines are delivered in segment order by one worker,
+so a slow sentence never jumps ahead of the next.
 
-Language: with "auto", Whisper names it for every stretch; confident stretches agreeing make it the
-meeting's language (Cicada's hint and votes), used only when Whisper is unsure of a stretch."""
+Language: with "auto", Whisper picks one of the languages the user expects to hear (`candidates`) for
+every stretch; confident stretches agreeing make it the meeting's language (Cicada's hint and votes),
+used only when Whisper is unsure of a stretch."""
 from __future__ import annotations
 
 import queue
 import threading
 import time
 
-from . import capture, reason
+from . import capture, reason, speech
 from .core import LineFix, Segmenter, SessionStore, TranscriptLine, VoiceGate, Wav
 
 
-def interpret(line, reasoner, translator, recent: list, hints: tuple, log=lambda m: None, beam: int = 2) -> str:
+UNSURE_WORDS = 0.5  # Whisper's word confidence under which Penalar is told the line may be misheard
+
+
+def interpret(line, reasoner, translator, recent: list, hints: tuple, log=lambda m: None, beam: int = 2,
+              unsure: bool = False) -> str:
     """Fills in a heard line's translation: Penalar with the lines before it (fixing misheard words into
     `line.fixes`, Cicada's own field, so `line.shown` and the records carry them), NLLB when Penalar is off,
-    doesn't know the pair or gives nothing usable. `recent` is the running context, updated here. Returns
-    Penalar's note on what was meant, or ""."""
+    doesn't know the pair or gives nothing usable. `recent` is the running context, updated here. `unsure`
+    says Whisper doubted the words, so Penalar guesses less. Returns Penalar's note on what was meant, or ""."""
     src, tgt = line.srcLang, line.dstLang
     note = ""
     if src == tgt and reasoner is not None and reasoner.alive and reason.handles(src, tgt):
         # Nothing to translate, but misheard words still get fixed so the transcript reads right.
         try:
             topic, words = hints
-            line.fixes = [LineFix(from_=a, to=b) for a, b in reasoner.fix_line(line.src, src, recent, topic, words)] or None
+            line.fixes = [LineFix(from_=a, to=b) for a, b in reasoner.fix_line(line.src, src, recent, topic, words, unsure=unsure)] or None
         except Exception as e:
             log(f"penalar fix failed: {type(e).__name__}: {e}")
     if src != tgt:
         if reasoner is not None and reasoner.alive and reason.handles(src, tgt):
             try:
                 topic, words = hints
-                got = reasoner.translate_line(line.src, src, tgt, recent, topic, words)
+                got = reasoner.translate_line(line.src, src, tgt, recent, topic, words, unsure=unsure)
                 if got:
                     line.dst = got.translation
                     line.fixes = [LineFix(from_=a, to=b) for a, b in got.fixes] or None
@@ -49,8 +55,9 @@ def interpret(line, reasoner, translator, recent: list, hints: tuple, log=lambda
 class LiveSession:
     def __init__(self, recognizer, translator, store: SessionStore, source: str, src: str, tgt: str,
                  on_event, wav_path: str | None = None, wav_speed: float = 1.0, reasoner=None,
-                 hints=lambda: ("", "")):
+                 hints=lambda: ("", ""), candidates=None):
         self.recognizer, self.translator, self.store = recognizer, translator, store
+        self.candidates = list(candidates or [])
         self.reasoner, self.hints = reasoner, hints
         self._recent: list = []
         self.kind, self.src, self.tgt = source, src, tgt
@@ -63,11 +70,15 @@ class LiveSession:
         self._queue: queue.Queue = queue.Queue()
         self._pending = 0
         self._last_level = 0.0
-        self._segmenter = Segmenter()
+        self._gate = None
+        try:
+            self._segmenter = speech.SpeechSegmenter()
+        except ImportError:  # no onnxruntime: cut by loudness as Cicada does
+            self._segmenter = Segmenter()
+            # A room mic hears the room and a voice across the table can sit under -40 dBFS: Cicada's
+            # VoiceGate learns the room's noise and lowers the segmenter's line to twice it.
+            self._gate = VoiceGate(adaptive=True) if source == "mic" else None
         self._segmenter.on_segment = self._segment
-        # A room mic hears the room and a voice across the table can sit under -40 dBFS: Cicada's
-        # VoiceGate learns the room's noise and lowers the segmenter's line to twice it.
-        self._gate = VoiceGate(adaptive=True) if source == "mic" else None
         self._source: capture.Source | None = None
         self._worker: threading.Thread | None = None
         self.lines = 0
@@ -159,7 +170,7 @@ class LiveSession:
         else:
             # Every stretch is asked which language it is: people switch mid-meeting, and locking onto
             # the first language heard turned Indonesian and English into Korean in testing.
-            heard = self.recognizer.hear(segment.samples, language=None)
+            heard = self.recognizer.hear(segment.samples, language=None, candidates=self.candidates)
             if heard.lang and heard.lang == self._candidate:
                 self._votes += 1
             else:
@@ -179,7 +190,8 @@ class LiveSession:
             self._emit({"type": "line", "sid": self.sid, "id": line.id, "t": line.t, "src": line.src, "dst": None,
                         "srcLang": src, "dstLang": tgt, "translating": True})
         t0 = time.monotonic()
-        note = interpret(line, self.reasoner, self.translator, self._recent, self.hints())
+        note = interpret(line, self.reasoner, self.translator, self._recent, self.hints(),
+                         unsure=heard.confidence < UNSURE_WORDS)
         self.lines += 1
         self.store.append(self.sid, line)
         self._emit({"type": "line", "sid": self.sid, "id": line.id, "t": line.t, "src": line.shown, "dst": line.dst,

@@ -181,6 +181,33 @@ function renderHistory(items) {
 // ───────── Live ─────────
 let liveTgtBar;
 
+// "Detect" picks only among these: asked to choose from all 99, Whisper heard Indonesian as Javanese,
+// Vietnamese and once Khmer. The favourites are always offered; others can be added.
+function renderHear() {
+  $('hearRow').hidden = $('liveSrc').value !== 'auto';
+  const chosen = state.settings.liveLangs || [];
+  const speech = state.langs.filter((l) => l.speech);
+  const shown = [...new Set([...speech.filter((l) => l.favorite).map((l) => l.id), ...chosen])];
+  const box = $('hearLangs');
+  box.replaceChildren();
+  for (const id of shown) {
+    const c = el('sakuga-checkbox', { textContent: langName(id) });
+    if (chosen.includes(id)) c.setAttribute('checked', '');
+    c.addEventListener('change', () => {
+      const now = c.checked ? [...chosen, id] : chosen.filter((x) => x !== id);
+      if (!now.length) { c.checked = true; toast('Pilih paling sedikit satu bahasa.'); return; }
+      save({ liveLangs: now }).then(renderHear);
+    });
+    box.append(c);
+  }
+  const more = $('hearMore');
+  more.replaceChildren(el('option', { value: '', textContent: 'Tambah bahasa…' }));
+  for (const l of byName().filter((l) => l.speech && !shown.includes(l.id))) {
+    more.append(el('option', { value: l.id, textContent: `${l.name} · ${l.native}` }));
+  }
+  more.onchange = () => more.value && save({ liveLangs: [...chosen, more.value] }).then(renderHear);
+}
+
 function setupLive() {
   const radio = $('liveSource');
   radio.value = state.settings.liveSource;
@@ -189,7 +216,8 @@ function setupLive() {
   src.append(el('option', { value: 'auto', textContent: 'Deteksi otomatis' }));
   for (const l of byName().filter((l) => l.speech)) src.append(el('option', { value: l.id, textContent: `${l.name} · ${l.native}` }));
   src.value = state.settings.liveSrc;
-  src.addEventListener('change', () => save({ liveSrc: src.value }));
+  src.addEventListener('change', () => { save({ liveSrc: src.value }); renderHear(); });
+  renderHear();
   liveTgtBar = new LangBar($('liveTgtBar'), { value: state.settings.liveTgt, onChange: (v) => { save({ liveTgt: v }); api.set_live_target(v); } });
   keepTyped($('liveTopic'), 'liveTopic');
 
@@ -413,6 +441,7 @@ function setupModels() {
   $('reasoning').checked = !!state.settings.reasoning;
   $('reasoning').addEventListener('change', () => save({ reasoning: $('reasoning').checked }));
   keepTyped($('words'), 'words');
+  keepTyped($('slang'), 'slang');
   $('keepHistory').checked = !!state.settings.keepHistory;
   $('keepHistory').addEventListener('change', () => save({ keepHistory: $('keepHistory').checked }));
   $('openData').textContent = state.dataFolder;

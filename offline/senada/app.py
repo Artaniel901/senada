@@ -9,7 +9,7 @@ import threading
 import time
 import traceback
 
-from . import __version__, catalog, detect, export, languages, paths, reason
+from . import __version__, catalog, detect, export, languages, paths, reason, slang, speech
 from .store import History, Settings
 
 catalog.use_gpu_libraries()
@@ -26,6 +26,40 @@ def log(message: str) -> None:
             f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + message + "\n")
     except OSError:
         pass
+
+
+def _hearable(ids) -> list:
+    """The languages "auto" may choose from while listening: known ones Whisper can hear, no repeats."""
+    out = []
+    for lid in ids if isinstance(ids, list) else []:
+        if isinstance(lid, str) and lid in languages.BY_ID and languages.BY_ID[lid].whisper and lid not in out:
+            out.append(lid)
+    return out[:12]
+
+
+def _fresh_ui(storage: str) -> None:
+    """The page is served from 127.0.0.1 and WebView2 keeps its files in an HTTP cache, so after an update
+    the window kept the old app.css (the new language checkboxes showed unstyled). When anything in ui/
+    changed since the last start, the browser cache (not settings, records or local storage) is emptied."""
+    import hashlib
+    import shutil
+    stamp = hashlib.sha1()
+    for root, _, files in os.walk(paths.UI):
+        for name in sorted(files):
+            st = os.stat(os.path.join(root, name))
+            stamp.update(f"{os.path.relpath(os.path.join(root, name), paths.UI)}:{st.st_size}:{st.st_mtime_ns};".encode())
+    marker = os.path.join(storage, "ui-stamp.txt")
+    try:
+        with open(marker, encoding="utf-8") as f:
+            if f.read() == stamp.hexdigest():
+                return
+    except OSError:
+        pass
+    for cache in ("Cache", "Code Cache"):
+        shutil.rmtree(os.path.join(storage, "EBWebView", "Default", cache), ignore_errors=True)
+    os.makedirs(storage, exist_ok=True)
+    with open(marker, "w", encoding="utf-8") as f:
+        f.write(stamp.hexdigest())
 
 
 def _drive_script() -> str | None:
@@ -112,6 +146,7 @@ class Api:
         Paths.home_override = paths.data()
         os.makedirs(paths.data(), exist_ok=True)
         self._settings = Settings()
+        slang.set_user(self._settings.get("slang"))
         self._history = History()
         self._records = SessionStore()
         self._engines = Engines(self._settings, self._emit)
@@ -154,7 +189,14 @@ class Api:
 
     def save_settings(self, patch: dict) -> dict:
         before = dict(self._settings.values)
-        values = self._settings.update(patch or {})
+        patch = dict(patch or {})
+        if "liveLangs" in patch:
+            patch["liveLangs"] = _hearable(patch["liveLangs"]) or before["liveLangs"]
+        values = self._settings.update(patch)
+        if "slang" in patch:
+            slang.set_user(values["slang"])
+        if self._live and "liveLangs" in patch:
+            self._live.candidates = list(values["liveLangs"])
         reload = []
         if values["asrModel"] != before["asrModel"]:
             reload.append("asr")
@@ -229,7 +271,7 @@ class Api:
         from .live import LiveSession
         self._live = LiveSession(self._engines.recognizer, self._engines.translator, self._records, source, src, tgt,
                                 self._live_event, wav_path=path, wav_speed=1.0, reasoner=self._engines.reasoner,
-                                hints=self._hints)
+                                hints=self._hints, candidates=self._settings.get("liveLangs"))
         try:
             sid = self._live.start()
         except Exception as e:
@@ -287,16 +329,21 @@ class Api:
         self._emit({"type": "started", "sid": sid, "source": "file", "name": os.path.basename(path)})
         count = 0
         try:
-            code = languages.get(src).whisper if src != "auto" else None
+            from faster_whisper import decode_audio
+            audio = decode_audio(path, sampling_rate=16000)
             with rec._gate:
-                segments, info = rec.model.transcribe(path, language=code, beam_size=5, vad_filter=True,
-                                                      condition_on_previous_text=False)
-                found = languages.from_whisper(info.language)
-                lang = src if src != "auto" else (found.id if found else "en")
+                if src == "auto":
+                    # As live: the language is chosen among the ones the user expects, from the first minute.
+                    picked, _ = rec._choose(audio[:60 * 16000], self._settings.get("liveLangs"))
+                    lang = picked or "en"
+                else:
+                    lang = src
+                segments, info = rec.model.transcribe(audio, language=languages.get(lang).whisper, beam_size=5,
+                                                      vad_filter=True, condition_on_previous_text=False)
                 total = float(info.duration or 0) or 1.0
                 for s in segments:
                     text = s.text.strip()
-                    if not text:
+                    if not text or s.avg_logprob < -1.4 or not speech.plausible(text, lang):
                         continue
                     count += 1
                     line = TranscriptLine(id=f"h1-{count}", t=round(s.start, 2), speaker="them", src=text, dst=None,
@@ -518,5 +565,7 @@ def main() -> None:
             bar.destroy()
 
     main_window.events.closing += closing
+    storage = os.path.join(paths.data(), "webview")
+    _fresh_ui(storage)
     webview.start(started, gui="edgechromium", private_mode=False, icon=paths.ICON,
-                  storage_path=os.path.join(paths.data(), "webview"), debug=os.environ.get("SENADA_DEBUG") == "1")
+                  storage_path=storage, debug=os.environ.get("SENADA_DEBUG") == "1")

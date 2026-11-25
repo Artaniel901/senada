@@ -8,7 +8,7 @@ import re
 import threading
 from collections import OrderedDict
 
-from . import catalog, languages
+from . import catalog, languages, slang
 
 _SENTENCE = re.compile(r"(?<=[.!?…。！？])\s+|(?<=[。！？])")
 _CJK = {"ja", "zh", "zh-Hant", "yue", "th", "lo", "km", "my"}
@@ -58,7 +58,7 @@ class Translator:
         for line in lines:
             sentences = split_sentences(line)
             shape.append(len(sentences))
-            todo.extend(sentences)
+            todo.extend(slang.plain(x, src) for x in sentences)  # NLLB can't take notes: plain words instead
         done = self._batch(todo, s, t, beam)
         joiner = "" if tgt in _CJK else " "
         out, i = [], 0

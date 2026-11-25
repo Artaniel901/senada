@@ -27,6 +27,10 @@ class Replies(unittest.TestCase):
         self.assertIsNone(reason.parse_reply('{"translation": 3}'))
         self.assertIsNone(reason.parse_reply('{"translation": "a",'))
 
+    def test_echoed_unclear_mark_becomes_an_ellipsis(self):
+        self.assertEqual(reason.parse_reply('{"translation": "UNCLEAR", "note": "x"}')["translation"], "…")
+        self.assertEqual(reason.parse_reply('{"translation": "Unclear words", "note": ""}')["translation"], "Unclear words")
+
     def test_note_that_is_not_text_becomes_empty(self):
         self.assertEqual(reason.parse_reply('{"translation": "x", "note": null}')["note"], "")
 
@@ -92,13 +96,14 @@ class FakeReasoner:
     def __init__(self, line=None, fail=False):
         self.line, self.fail, self.seen = line, fail, []
 
-    def translate_line(self, text, src, tgt, recent, topic, words):
+    def translate_line(self, text, src, tgt, recent, topic, words, unsure=False):
+        self.unsure = unsure
         self.seen.append((text, list(recent), topic, words))
         if self.fail:
             raise TimeoutError("slow")
         return self.line
 
-    def fix_line(self, text, src, recent, topic, words):
+    def fix_line(self, text, src, recent, topic, words, unsure=False):
         self.fixed = text
         if self.fail:
             raise TimeoutError("slow")
