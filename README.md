@@ -58,9 +58,9 @@ The full guide, in Indonesian, is in [offline/README.md](offline/README.md).
 
 ## Credits and licences
 
-Senada is a fork of [**Cicada**](https://github.com/wquguru/cicada) by wquguru (Apache-2.0) and uses its
-Linux engine unchanged. The rest of this repository is Cicada's own Mac, Windows, Linux and Android apps;
-their README is in [docs/cicada](docs/cicada/README.md).
+Senada is a fork of [**Cicada**](https://github.com/wquguru/cicada) by wquguru (Apache-2.0). It keeps
+Cicada's engine (`linux/cicada/core`) unchanged; the rest of this repository is Senada's own, in `offline/`.
+Cicada's apps for Mac, Windows, Linux and Android live on in the upstream repository.
 
 - Buttons and controls: [Sakuga VFX](https://github.com/finktheartist/sakuga-vfx) by Justin Finkelman (MIT)
 - NLLB-200 by Meta: CC-BY-NC 4.0, **non-commercial use only**

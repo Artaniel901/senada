@@ -36,3 +36,12 @@ server/.dev.vars
 # Signing keys never enter the repo (android/scripts/keystore.sh keeps them in ~/.cicada-android)
 *.jks
 *.keystore
+
+# Secrets and environment files never enter the repo, in any folder
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
